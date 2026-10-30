@@ -1,3 +1,6 @@
 # OWASP ZAP baseline rules for Pub Karaoke: anything not listed here fails the scan on a warning.
 # Each IGNORE says why the alert doesn't apply. Format: rule id <TAB> IGNORE|WARN|FAIL <TAB> (reason)
 90004	IGNORE	(Cross-Origin-Embedder-Policy would block the YouTube karaoke player on the TV; COOP and CORP are set)
+10049	IGNORE	(only the static pages, scripts and fonts may be cached; every /api/ response is sent with Cache-Control: no-store)
+10109	IGNORE	(informational: the pages are a JavaScript app, nothing to fix)
+10202	IGNORE	(no form posts to the server: JavaScript sends JSON or the X-Pin header, which other sites can't send without a CORS preflight the app never grants)

@@ -420,6 +420,8 @@ def create_app(root):
         r.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
         r.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         r.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        if request.path.startswith("/api/"):  # names in the queue, staff data: never kept by a cache on the way
+            r.headers["Cache-Control"] = "no-store"
         return r
 
     csv_file, starter = library / "karafuncatalog.csv", root / "starter-songs.txt"

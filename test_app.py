@@ -291,11 +291,12 @@ def test_song_maker_retries_blips_and_gives_up_on_hopeless_songs(tmp_path, monke
     import app
     (tmp_path / "settings.json").write_text(json.dumps({"pin": "9999", "auto_download": False}))
     (tmp_path / "make_songs.py").write_text(FAKE_MAKER)
-    (tmp_path / ".venv-maker" / "Scripts").mkdir(parents=True)
-    (tmp_path / ".venv-maker" / "Scripts" / "python.exe").write_text("")  # stands in; the real interpreter runs it
+    maker = tmp_path / app.MAKER_PY  # where this OS's song maker lives; it stands in, the real interpreter runs it
+    maker.parent.mkdir(parents=True)
+    maker.write_text("")
     real = subprocess.Popen
     monkeypatch.setattr(app.subprocess, "Popen", lambda args, **kw: real(  # only the song maker's launch is redirected
-        [sys.executable, *args[1:]] if str(args[0]).endswith("python.exe") else args, **kw))
+        [sys.executable, *args[1:]] if str(args[0]) == str(maker) else args, **kw))
     monkeypatch.setattr(app, "karaoke_videos", lambda text: [])
     c = app.create_app(tmp_path).test_client()
     for name, wish in (("Anna", "Good - Song"), ("Ben", "Flaky - Song"), ("Cara", "NoLyrics - Song")):
@@ -321,11 +322,12 @@ def test_a_guest_pick_interrupts_a_background_song(tmp_path, monkeypatch):
     (tmp_path / "library" / "karafuncatalog.csv").write_text(
         "Id;Title;Artist;Year;Duo;Explicit;Date Added;Styles;Languages\n1;Song;Slow;2000;0;0;x;Pop;English\n", encoding="utf-8")
     (tmp_path / "make_songs.py").write_text(FAKE_MAKER)
-    (tmp_path / ".venv-maker" / "Scripts").mkdir(parents=True)
-    (tmp_path / ".venv-maker" / "Scripts" / "python.exe").write_text("")
+    maker = tmp_path / app.MAKER_PY  # where this OS's song maker lives; it stands in, the real interpreter runs it
+    maker.parent.mkdir(parents=True)
+    maker.write_text("")
     real = subprocess.Popen
     monkeypatch.setattr(app.subprocess, "Popen", lambda args, **kw: real(  # only the song maker's launch is redirected
-        [sys.executable, *args[1:]] if str(args[0]).endswith("python.exe") else args, **kw))
+        [sys.executable, *args[1:]] if str(args[0]) == str(maker) else args, **kw))
     monkeypatch.setattr(app, "karaoke_videos", lambda text: [])
     c = app.create_app(tmp_path).test_client()
     wait = lambda done, secs: next((True for _ in range(int(secs * 5)) if done() or clock.sleep(0.2)), done())
@@ -590,6 +592,7 @@ def test_pages_get_security_headers(client):
     h = client.get("/").headers
     assert "frame-ancestors 'none'" in h["Content-Security-Policy"] and "unsafe" not in h["Content-Security-Policy"]
     assert h["X-Content-Type-Options"] == "nosniff" and h["Referrer-Policy"] == "no-referrer"
+    assert client.get("/api/state").headers["Cache-Control"] == "no-store"
 
 
 def test_staff_set_the_venue_look_but_nothing_unsafe(client):

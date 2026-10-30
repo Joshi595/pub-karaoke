@@ -241,6 +241,8 @@ def test_staff_song_care(pub, client):
     assert client.post("/api/admin/delete_song", json={"slug": "c-d"}, headers=PIN).status_code == 200
     assert not (lib / "c-d").exists() and ready_shelf(client) == ["a-b"]
     assert client.post("/api/admin/delete_song", json={"slug": "karafuncatalog.csv"}, headers=PIN).json["error"] == "not_found"
+    for bad in ("../a-b", "..", ["c-d"], {"x": 1}):  # a path or not a string: never a folder to delete
+        assert client.post("/api/admin/delete_song", json={"slug": bad}, headers=PIN).json["error"] == "not_found"
 
 
 def test_same_song_twice_even_after_it_was_made():
@@ -604,3 +606,8 @@ def test_staff_set_the_venue_look_but_nothing_unsafe(client):
     for bad in ({"accent": "red;background:url(x)"}, {"icon": "<svg>"}, {"shelves": ["nope"]}, {"shelves": [["ready"]]},
                 {"look": "matrix"}, {"pub_name": " "}, {"pin": "0000"}):
         assert client.post("/api/admin/settings", json=bad, headers=pin).status_code == 400, bad
+
+
+def test_values_of_the_wrong_type_get_a_clean_no(client):
+    assert client.post("/api/queue", json={"name": "Anna", "device": "d1", "song_id": ["a-b"]}).json["error"] == "unknown_song"
+    assert client.post("/api/admin/retime", json={"slug": {"a": 1}}, headers={"X-Pin": "9999"}).json["error"] == "not_found"

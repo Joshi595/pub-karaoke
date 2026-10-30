@@ -66,7 +66,7 @@ class Party:
     def add(self, name, device, song_id, wish=None, yt=(), catalog=None, video=False):
         """A wish is a song not in the library yet: it plays from the library once made, else from YouTube (yt ids).
         catalog: its id in the song list. video: it can't be made (no timed lyrics), so it plays from YouTube."""
-        if not wish and song_id not in self.songs:
+        if not wish and (not isinstance(song_id, str) or song_id not in self.songs):
             raise QueueError("unknown_song")
         name = self.check(name, song_id, wish)
         entry = {"id": uuid.uuid4().hex[:8], "name": name, "device": str(device)[:64], "song_id": song_id,
@@ -947,7 +947,7 @@ def create_app(root):
     @admin
     def admin_retime():
         slug = body().get("slug")
-        if slug not in songs:
+        if not isinstance(slug, str) or slug not in songs:
             raise QueueError("not_found")
         if slug not in retimes:
             retimes.append(slug)
@@ -971,9 +971,9 @@ def create_app(root):
     def admin_delete_song():
         """A badly made song leaves the library; picking it again makes it afresh."""
         slug = body().get("slug")
-        if slug not in songs or (party.now_playing and party.now_playing["song_id"] == slug):
+        if not isinstance(slug, str) or slug not in songs or (party.now_playing and party.now_playing["song_id"] == slug):
             raise QueueError("not_found")
-        shutil.rmtree(library / slug, ignore_errors=True)
+        shutil.rmtree(library / songs[slug]["id"], ignore_errors=True)  # the folder we loaded, never a path sent to us
         refresh_library(force=True)
         return jsonify(ok=True)
 

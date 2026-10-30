@@ -1,0 +1,117 @@
+
+:root {
+  --ink: #0B1A13;          /* outline and shadows */
+  --unsung: #FFF8E7;       /* words still to sing */
+  --sung: #F4C54A;         /* words already sung; themes override */
+  --panel: color-mix(in srgb, var(--bg) 80%, transparent);
+  --title-font: var(--display-font);
+  --lyric-font: "Atkinson", system-ui, sans-serif;
+  --lyric-weight: 700;
+  --lyric-transform: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--unsung); cursor: none; }
+body { font-family: var(--body-font); }
+#bg { position: fixed; inset: 0; z-index: 0; }
+#bg canvas { width: 100vw !important; height: 100vh !important; display: block; }
+.scene { position: fixed; inset: 0; z-index: 1; }
+.scene[hidden] { display: none !important; }  /* beats the per-scene #id display rules */
+.shade { text-shadow: 0 .04em .12em #000c; }
+.qr { background: #fff; border-radius: 1.2vh; padding: 1vh; line-height: 0; }
+.qr svg { width: 100%; height: auto; display: block; }
+
+/* lobby */
+#lobby { display: grid; grid-template-columns: auto 1fr; gap: 4vh 6vw; align-content: center; padding: 6vh 7vw; }
+#lobby h1 { grid-column: 1 / -1; margin: 0; font: 400 11vh/1 var(--title-font); }
+.join { display: grid; grid-template-columns: 34vh auto; gap: 2vh 3vw; align-items: end; }
+.join .qr { width: 34vh; }
+.join .wifi .qr { width: 20vh; }
+.join p { margin: 1vh 0 0; font-size: 2.6vh; white-space: pre-line; overflow-wrap: anywhere; }
+.join .big { font: 700 4.6vh/1.15 var(--lyric-font); margin: 0 0 1vh; }
+.lineup { align-self: center; background: var(--panel); border-radius: 2vh; padding: 3vh 3vw; backdrop-filter: blur(6px); }
+.lineup h2 { margin: 0 0 1.5vh; font: 400 5vh var(--title-font); }
+.lineup ol { margin: 0; padding: 0 0 0 1.2em; font-size: 3.4vh; line-height: 1.5; }
+.lineup li span { opacity: .75; }
+.lineup .free { font-size: 3.4vh; margin: 0; opacity: .85; }
+.lineup .prep { font-size: 3vh; margin: 2vh 0 0; color: var(--accent); }
+.lineup .later { opacity: .6; font-size: .8em; }
+
+/* up next */
+#upnext { display: grid; place-content: center; text-align: center; gap: 2vh; }
+#upnext .who { font: 700 16vh/1 var(--lyric-font); margin: 0; color: var(--accent); }
+#upnext .call { font: 400 6vh var(--title-font); margin: 0; }
+#upnext .song { font-size: 4vh; margin: 0; opacity: .9; }
+#upnext .count { font: 700 9vh/1 var(--lyric-font); margin: 2vh auto 0; width: 16vh; height: 16vh; border-radius: 50%; display: grid; place-content: center; border: .8vh solid var(--accent); }
+#upnext .qrcorner { position: fixed; right: 3vw; bottom: 4vh; width: 16vh; text-align: center; font-size: 2vh; }
+
+/* singing */
+#title { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; gap: 1.5vh; transition: opacity .8s; }
+#title.gone { opacity: 0; }
+#title .t { font: 400 12vh/1.05 var(--title-font); margin: 0; max-width: 85vw; }
+#title .a { font-size: 5vh; margin: 0; opacity: .9; }
+#title .s { font: 700 4vh var(--lyric-font); margin: 2vh 0 0; color: var(--accent); }
+/* Lyrics. Layout, highlight, size and position are classes set by tv.js from the theme or the staff page. */
+#lyrics { --scale: 1.15; position: fixed; left: 5vw; right: 5vw; top: 50%; transform: translateY(-62%); text-align: center;
+  font-family: var(--lyric-font); font-weight: var(--lyric-weight); text-transform: var(--lyric-transform);
+  filter: drop-shadow(0 0 .05em var(--ink)) drop-shadow(0 0 .05em var(--ink)) drop-shadow(0 .06em .14em #000a); }
+#lyrics.size-S { --scale: .8; } #lyrics.size-M { --scale: 1; } #lyrics.size-XL { --scale: 1.35; }
+#lyrics.pos-lower { top: auto; bottom: 15vh; transform: none; }
+#lyrics.band { background: #000000a6; padding: 2.4vh 3vw; border-radius: 2.4vh; }
+#lines .line { margin: 0; line-height: 1.25; min-height: 1.25em; font-size: calc(6.2vh * var(--scale)); }
+#lines .line + .line { margin-top: 1.6vh; }
+#lines .line.next { opacity: .72; }
+.layout-ball #lines .line + .line { margin-top: calc(6vh * var(--scale)); }  /* room for the ball above the lower line */
+.layout-bigline #lines .line.now { font-size: calc(9.6vh * var(--scale)); line-height: 1.1; }
+.layout-bigline #lines .line.next { font-size: calc(4.2vh * var(--scale)); opacity: .55; margin-top: 3vh; }
+/* scroll: every line the same size so positions never shift; the sung one is scaled up instead */
+#lyrics.layout-scroll { top: 14vh; bottom: 17vh; transform: none; overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); }
+.layout-scroll #lines { position: absolute; left: 0; right: 0; top: 50%; transition: transform .7s cubic-bezier(.2, .7, .2, 1); }
+.layout-scroll #lines .line { font-size: calc(6vh * var(--scale)); margin: 0 0 1.2vh; transform: scale(.74); opacity: .5; transition: transform .45s, opacity .45s; }
+.layout-scroll #lines .line.now { transform: none; opacity: 1; }
+.layout-scroll #lines .line.past { opacity: .28; }
+.layout-scroll #lines .line.past .w { filter: none; }
+.layout-scroll #dots { position: absolute; left: 0; right: 0; top: calc(50% - 10vh); }
+
+.w { --p: 0; color: transparent; -webkit-text-stroke: 1px var(--ink);
+  background: linear-gradient(90deg, var(--sung) calc(var(--p) * 100%), var(--unsung) 0);
+  -webkit-background-clip: text; background-clip: text; }
+.hl-glow .w.done { filter: drop-shadow(0 0 .14em var(--sung)); }
+.hl-glow .w.on { filter: drop-shadow(0 0 .28em var(--sung)) brightness(1.12); }
+.hl-pop .w { display: inline-block; transition: transform .14s ease-out; }
+.hl-pop .w.on { transform: translateY(-.07em) scale(1.12); }
+@media (prefers-reduced-motion: reduce) { .hl-pop .w, .layout-scroll #lines, .layout-scroll #lines .line { transition: none; } }
+#ball { position: absolute; left: 0; top: 0; width: calc(3vh * var(--scale)); height: calc(3vh * var(--scale)); border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 .4vh var(--ink), 0 .8vh 1.2vh #0009; opacity: 0; transition: opacity .3s; pointer-events: none; }
+#ball[hidden] { display: none; }
+#dots { height: 6vh; display: flex; justify-content: center; gap: 2.2vh; margin-bottom: 2vh; }
+#dots i { width: 3.6vh; height: 3.6vh; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 .4vh var(--ink); }
+#gap { position: fixed; left: 50%; top: 24vh; transform: translateX(-50%); text-align: center; font-size: 8vh; }
+#gap .bar { width: 30vw; height: 1.2vh; margin: 2vh auto 0; background: #ffffff33; border-radius: 1vh; overflow: hidden; }
+#gap .bar i { display: block; height: 100%; background: var(--accent); width: 0; }
+.bottom { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: auto 1fr auto auto; gap: 2vw; align-items: center;
+  padding: 1.6vh 2.4vw; background: linear-gradient(transparent, #000b 35%); font-size: 2.8vh; }
+.bottom .singer { font-weight: 700; color: var(--accent); font-size: 3.4vh; }
+.bottom .progress { height: .8vh; background: #ffffff33; border-radius: 1vh; overflow: hidden; margin-top: .8vh; }
+.bottom .progress i { display: block; height: 100%; width: 0; background: var(--accent); }
+.bottom .next { opacity: .85; text-align: right; }
+.bottom .qr { width: 10vh; border-radius: .8vh; padding: .5vh; }
+
+/* applause */
+#applause { display: grid; place-content: center; text-align: center; }
+#applause p { margin: 0; font: 400 9vh/1.1 var(--title-font); }
+#applause .who { font: 700 14vh/1 var(--lyric-font); color: var(--accent); }
+
+/* YouTube karaoke video: for wished songs that aren't made yet */
+#video { background: #000; }
+#video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+/* sync test: the flash should land on the click */
+#synctest { display: grid; place-content: center; text-align: center; gap: 2vh; }
+#flash { width: 30vh; height: 30vh; border-radius: 50%; margin: 0 auto 3vh; background: var(--accent); opacity: .12; box-shadow: 0 0 0 1vh var(--ink); }
+#flash.on { opacity: 1; }
+#synctest p { margin: 0 auto; max-width: 70vw; font-size: 3.4vh; }
+#synctest .delay { font: 700 7vh var(--lyric-font); color: var(--accent); }
+
+#start { position: fixed; inset: 0; z-index: 9; display: grid; place-content: center; text-align: center; background: #000d; font-size: 4vh; cursor: pointer; }
+#start[hidden] { display: none; }

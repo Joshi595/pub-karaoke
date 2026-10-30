@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B1222">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
+<title>Karaoke</title>
+<link rel="stylesheet" href="/static/looks.css">
+<script src="/static/look.js"></script>
+<link rel="stylesheet" href="/static/guest.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="pub">Karaoke</h1>
+    <div class="lang" role="group" aria-label="Language / Sprache">
+      <button type="button" data-lang="en">EN</button>
+      <button type="button" data-lang="de">DE</button>
+    </div>
+    <p class="tagline" data-t="tagline"></p>
+  </header>
+
+  <p class="stage" id="stage" aria-live="polite"></p>
+  <p class="me" id="me" hidden><span id="meText"></span> <button type="button" class="link" id="rename" data-t="change"></button></p>
+
+  <section class="tickets" id="tickets" hidden aria-labelledby="ticketsTitle">
+    <h2 id="ticketsTitle" data-t="mine"></h2>
+    <div id="ticketList"></div>
+  </section>
+
+  <div class="search">
+    <input id="q" type="search" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" data-tp="search" aria-controls="songs">
+  </div>
+  <div class="chips" id="chips" role="group" data-tl="shelves"></div>
+  <p class="hint" id="hint" aria-live="polite"></p>
+  <ul class="songs" id="songs"></ul>
+  <button type="button" class="more" id="more" data-t="more" hidden></button>
+
+  <section class="wish" aria-labelledby="wishTitle">
+    <h2 id="wishTitle" data-t="wishTitle"></h2>
+    <p data-t="wishText"></p>
+    <form class="formrow" id="wishForm">
+      <input id="wishInput" maxlength="120" autocomplete="off" data-tp="wishPlaceholder" aria-labelledby="wishTitle">
+      <button class="ghost" data-t="wishButton"></button>
+    </form>
+  </section>
+</div>
+
+<dialog id="nameDialog" aria-labelledby="nameTitle">
+  <form method="dialog" id="nameForm">
+    <h2 id="nameTitle" data-t="nameTitle"></h2>
+    <p data-t="nameText"></p>
+    <input id="nameInput" maxlength="24" autocomplete="nickname" aria-labelledby="nameTitle" required>
+    <div class="actions">
+      <button type="button" class="ghost" id="nameCancel" data-t="cancel"></button>
+      <button class="sing" data-t="addMine"></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="videoDialog" aria-labelledby="videoTitle">
+  <h2 id="videoTitle" data-t="videoTitle"></h2>
+  <p data-t="videoText"></p>
+  <div class="actions">
+    <button type="button" class="ghost" id="videoCancel" data-t="cancel"></button>
+    <button type="button" class="sing" id="videoAdd" data-t="videoAdd"></button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/static/guest.js"></script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+# Starter song list: songs guests can find before the KaraFun list is added, and the song maker's first batch.
+# One "Artist - Title" per line. Add "| theme" to force a look: celtic, neon80s, disco, rock, ballad, pop, cover.
+# Sections fill the guests' song lists: "# Crowd favourites", "# Irish" and "# German" (examples: edit them for your
+# venue, and pick which lists phones show on the staff page). Irish and German songs pick their look automatically.
+
+# Crowd favourites
+ABBA - Dancing Queen
+ABBA - Mamma Mia
+ABBA - Waterloo
+AC/DC - Highway to Hell
+AC/DC - You Shook Me All Night Long
+Adele - Rolling in the Deep
+Adele - Someone Like You
+Aerosmith - I Don't Want to Miss a Thing
+a-ha - Take On Me
+Alanis Morissette - Ironic
+Amy Winehouse - Rehab
+Amy Winehouse - Valerie
+Avril Lavigne - Complicated
+Backstreet Boys - I Want It That Way
+Backstreet Boys - Everybody (Backstreet's Back)
+Billy Idol - White Wedding
+Billy Joel - Piano Man
+Bon Jovi - Livin' on a Prayer
+Bon Jovi - It's My Life
+Bonnie Tyler - Total Eclipse of the Heart
+Bonnie Tyler - Holding Out for a Hero
+Britney Spears - ...Baby One More Time
+Britney Spears - Toxic
+Bruce Springsteen - Dancing in the Dark
+Bruno Mars - Uptown Funk
+Bryan Adams - Summer of '69
+Bryan Adams - Heaven
+Celine Dion - My Heart Will Go On
+Cher - Believe
+Chuck Berry - Johnny B. Goode
+Coldplay - Viva la Vida
+Coldplay - Yellow
+Coldplay - The Scientist
+Creedence Clearwater Revival - Proud Mary
+Cyndi Lauper - Girls Just Want to Have Fun
+Dexys Midnight Runners - Come On Eileen
+Dire Straits - Sultans of Swing
+Dolly Parton - Jolene
+Dolly Parton - 9 to 5
+Don McLean - American Pie
+Duran Duran - Hungry Like the Wolf
+Eagles - Hotel California
+Ed Sheeran - Shape of You
+Ed Sheeran - Perfect
+Ed Sheeran - Thinking Out Loud
+Elton John - Your Song
+Elton John - I'm Still Standing
+Elton John - Rocket Man
+Elvis Presley - Can't Help Falling in Love
+Elvis Presley - Suspicious Minds
+Europe - The Final Countdown
+Eurythmics - Sweet Dreams (Are Made of This)
+Fleetwood Mac - Dreams
+Fleetwood Mac - Go Your Own Way
+Frank Sinatra - My Way
+Frank Sinatra - New York, New York
+Franz Ferdinand - Take Me Out
+Gloria Gaynor - I Will Survive
+Green Day - Basket Case
+Guns N' Roses - Sweet Child O' Mine
+Guns N' Roses - Paradise City
+Harry Styles - As It Was
+Journey - Don't Stop Believin'
+Kaiser Chiefs - I Predict a Riot
+Katy Perry - Firework
+Katy Perry - I Kissed a Girl
+KC and the Sunshine Band - Give It Up
+Kings of Leon - Sex on Fire
+Kylie Minogue - Can't Get You Out of My Head
+Lady Gaga - Shallow
+Lady Gaga - Bad Romance
+Lewis Capaldi - Someone You Loved
+Linkin Park - In the End
+Lionel Richie - Hello
+Lizzo - Good as Hell
+Madness - Our House
+Madonna - Like a Prayer
+Madonna - Material Girl
+Mariah Carey - All I Want for Christmas Is You
+Marvin Gaye - Ain't No Mountain High Enough
+Meat Loaf - I'd Do Anything for Love (But I Won't Do That)
+Michael Jackson - Billie Jean
+Michael Jackson - Beat It
+Miley Cyrus - Flowers
+Miley Cyrus - Party in the U.S.A.
+Mumford & Sons - Little Lion Man
+Neil Diamond - Sweet Caroline
+Nirvana - Smells Like Teen Spirit
+No Doubt - Don't Speak
+Oasis - Wonderwall
+Oasis - Don't Look Back in Anger
+Oasis - Champagne Supernova
+Olivia Rodrigo - drivers license
+Outkast - Hey Ya!
+Pink - So What
+Pink Floyd - Wish You Were Here
+Proclaimers - I'm Gonna Be (500 Miles)
+Pulp - Common People
+Queen - Bohemian Rhapsody
+Queen - Don't Stop Me Now
+Queen - We Will Rock You
+Queen - Somebody to Love
+R.E.M. - Losing My Religion
+Radiohead - Creep
+Red Hot Chili Peppers - Under the Bridge
+Rick Astley - Never Gonna Give You Up
+Robbie Williams - Angels
+Robbie Williams - Feel
+Robbie Williams - Let Me Entertain You
+Roxette - It Must Have Been Love
+Roxette - The Look
+Shania Twain - Man! I Feel Like a Woman!
+Shania Twain - You're Still the One
+Simon & Garfunkel - The Sound of Silence
+Spice Girls - Wannabe
+Survivor - Eye of the Tiger
+Taylor Swift - Shake It Off
+Taylor Swift - Love Story
+The Beatles - Hey Jude
+The Beatles - Let It Be
+The Beatles - Twist and Shout
+The Cranberries - Linger
+The Killers - Mr. Brightside
+The Killers - Somebody Told Me
+The Police - Every Breath You Take
+The Rolling Stones - (I Can't Get No) Satisfaction
+The Rolling Stones - Paint It Black
+The Verve - Bitter Sweet Symphony
+The Weeknd - Blinding Lights
+Tina Turner - The Best
+Tina Turner - What's Love Got to Do with It
+Toto - Africa
+Tom Jones - Delilah
+Tom Jones - Sex Bomb
+Village People - Y.M.C.A.
+Wham! - Wake Me Up Before You Go-Go
+Wham! - Last Christmas
+Whitney Houston - I Wanna Dance with Somebody (Who Loves Me)
+Whitney Houston - I Will Always Love You
+John Denver - Take Me Home, Country Roads
+Johnny Cash - Ring of Fire
+Kenny Rogers - The Gambler
+Lynyrd Skynyrd - Sweet Home Alabama
+Status Quo - Rockin' All Over the World
+Steppenwolf - Born to Be Wild
+Joan Jett & The Blackhearts - I Love Rock 'n' Roll
+Arctic Monkeys - I Bet You Look Good on the Dancefloor
+Blur - Song 2
+Snow Patrol - Chasing Cars
+
+# Irish
+The Pogues - Dirty Old Town
+The Pogues - Fairytale of New York
+The Pogues - Sally MacLennane
+The Pogues - The Irish Rover
+The Dubliners - Whiskey in the Jar
+The Dubliners - The Wild Rover
+The Dubliners - Molly Malone
+The Dubliners - Seven Drunken Nights
+The Dubliners - Rocky Road to Dublin
+The Dubliners - Raglan Road
+The Dubliners - The Black Velvet Band
+The Dubliners - Dicey Reilly
+The Dubliners - The Auld Triangle
+The Dubliners - Star of the County Down
+The Wolfe Tones - Grace
+The Wolfe Tones - The Fields of Athenry
+The Wolfe Tones - Come Out Ye Black and Tans
+The Clancy Brothers - Finnegan's Wake
+The Clancy Brothers - The Leaving of Liverpool
+The Fureys - The Green Fields of France
+Thin Lizzy - Whiskey in the Jar
+Thin Lizzy - The Boys Are Back in Town
+Thin Lizzy - Dancing in the Moonlight
+U2 - With or Without You
+U2 - I Still Haven't Found What I'm Looking For
+U2 - Beautiful Day
+U2 - One
+U2 - Sunday Bloody Sunday
+The Cranberries - Zombie
+The Cranberries - Dreams
+Sinéad O'Connor - Nothing Compares 2 U
+Van Morrison - Brown Eyed Girl
+Van Morrison - Have I Told You Lately
+The Corrs - Breathless
+The Corrs - Runaway
+Westlife - Flying Without Wings
+Westlife - Swear It Again
+Westlife - You Raise Me Up
+Boyzone - No Matter What
+Boyzone - Picture of You
+Hozier - Take Me to Church
+Dermot Kennedy - Outnumbered
+Kodaline - All I Want
+The Script - Hall of Fame
+The Script - The Man Who Can't Be Moved
+Dropkick Murphys - I'm Shipping Up to Boston
+Dropkick Murphys - Rose Tattoo
+Flogging Molly - Drunken Lullabies
+Ed Sheeran - Galway Girl
+Gilbert O'Sullivan - Alone Again (Naturally)
+Christy Moore - Ride On
+The Saw Doctors - N17
+The Pogues - A Pair of Brown Eyes
+Damien Rice - The Blower's Daughter
+Niall Horan - This Town
+
+# German
+Helene Fischer - Atemlos durch die Nacht
+Helene Fischer - Herzbeben
+Andrea Berg - Du hast mich tausendmal belogen
+Wolfgang Petry - Wahnsinn
+Wolfgang Petry - Verlieben, verloren, vergessen, verzeih'n
+Udo Jürgens - Griechischer Wein
+Udo Jürgens - Aber bitte mit Sahne
+Udo Jürgens - Ich war noch niemals in New York
+Udo Jürgens - Merci, Chérie
+Roland Kaiser - Santa Maria
+Roland Kaiser - Joana
+Matthias Reim - Verdammt, ich lieb' dich
+Howard Carpendale - Hello Again
+Jürgen Drews - Ein Bett im Kornfeld
+Michael Holm - Tränen lügen nicht
+Peter Maffay - Über sieben Brücken mußt du gehn
+Peter Maffay - Du
+Vanessa Mai - Ich sterb für dich
+DJ Ötzi - Ein Stern (der deinen Namen trägt)
+DJ Ötzi - Hey Baby
+Mickie Krause - Schatzi schenk mir ein Foto
+Mia Julia - Endlich wieder Malle
+Peter Wackel - Scheiß drauf
+Tim Toupet - Du hast die Haare schön
+Nena - 99 Luftballons | neon80s
+Nena - Irgendwie, irgendwo, irgendwann | neon80s
+Nena - Nur geträumt | neon80s
+Peter Schilling - Major Tom (Völlig losgelöst) | neon80s
+Spider Murphy Gang - Skandal im Sperrbezirk | neon80s
+Markus - Ich will Spaß | neon80s
+Falco - Rock Me Amadeus | neon80s
+Falco - Der Kommissar | neon80s
+Trio - Da Da Da | neon80s
+Geier Sturzflug - Bruttosozialprodukt | neon80s
+Hubert Kah - Sternenhimmel | neon80s
+Extrabreit - Hurra, hurra, die Schule brennt | neon80s
+Ideal - Blaue Augen | neon80s
+Münchener Freiheit - Ohne dich (schlaf' ich heut' Nacht nicht ein) | neon80s
+Herbert Grönemeyer - Männer | rock
+Herbert Grönemeyer - Bochum | rock
+Herbert Grönemeyer - Der Weg | ballad
+Marius Müller-Westernhagen - Freiheit | ballad
+Marius Müller-Westernhagen - Sexy | rock
+Die Toten Hosen - Tage wie diese | rock
+Die Toten Hosen - Hier kommt Alex | rock
+Die Ärzte - Schrei nach Liebe | rock
+Die Ärzte - Männer sind Schweine | rock
+Die Ärzte - Westerland | rock
+Rammstein - Du hast | rock
+Rammstein - Engel | rock
+Wolfgang Niedecken & BAP - Verdamp lang her | rock
+Marius Müller-Westernhagen - Johnny Walker | rock
+PUR - Abenteuerland | pop
+PUR - Lena | ballad
+Pur - Funkelperlenaugen | pop
+Wise Guys - Jetzt ist Sommer | pop
+Die Prinzen - Alles nur geklaut | pop
+Die Prinzen - Küssen verboten | pop
+Fettes Brot - Jein | pop
+Fettes Brot - Emanuela | pop
+Die Fantastischen Vier - Die da!?! | pop
+Seeed - Ding | pop
+Peter Fox - Haus am See | pop
+Cro - Easy | pop
+Mark Forster - Au Revoir | pop
+Mark Forster - Chöre | pop
+Andreas Bourani - Auf uns | pop
+Tim Bendzko - Nur noch kurz die Welt retten | pop
+Max Giesinger - 80 Millionen | pop
+Revolverheld - Halt dich an mir fest | ballad
+Silbermond - Das Beste | ballad
+Silbermond - Symphonie | ballad
+Juli - Perfekte Welle | pop
+Wir sind Helden - Nur ein Wort | pop
+Rosenstolz - Liebe ist alles | ballad
+Sarah Connor - Wie schön du bist | ballad
+Helene Fischer - Phänomen
+Kerstin Ott - Die immer lacht
+Beatrice Egli - Mein Herz
+Andreas Gabalier - Hulapalu
+Andreas Gabalier - I sing a Liad für di
+Nicole - Ein bißchen Frieden | ballad
+Katja Ebstein - Wunder gibt es immer wieder
+Drafi Deutscher - Marmor, Stein und Eisen bricht
+Wencke Myhre - Er steht im Tor
+Rex Gildo - Fiesta Mexicana
+Costa Cordalis - Anita
+Bernhard Brink - Liebe auf Zeit
+Nino de Angelo - Jenseits von Eden | ballad
+Klaus Lage - 1000 und 1 Nacht (Zoom!) | neon80s
+Truck Stop - Ich möcht' so gern Dave Dudley hör'n
+Ireen Sheer - Feuer
+Zlatko & Jürgen - Großer Bruder
+Die Atzen - Disco Pogo
+Gölä - Schwan
+Matthias Reim - Ich hab' geträumt von dir

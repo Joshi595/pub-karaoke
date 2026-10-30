@@ -1,0 +1,48 @@
+/* The venue's look, shared by every page: staff pick one on the staff page (Venue look), with their own accent and icon.
+   Each look is a palette plus a display face; body text is always Atkinson Hyperlegible, made for reading in dim rooms.
+   "paper" is the light surface of the song tickets and toasts: it stays light in every look so warnings read on it. */
+@font-face { font-family: "Atkinson"; src: url(/static/vendor/fonts/atkinsonhyperlegible-400-normal.woff2) format("woff2"); font-display: swap; }
+@font-face { font-family: "Atkinson"; font-weight: 700; src: url(/static/vendor/fonts/atkinsonhyperlegible-700-normal.woff2) format("woff2"); font-display: swap; }
+@font-face { font-family: "Fell"; src: url(/static/vendor/fonts/imfellenglish-400-normal.woff2) format("woff2"); font-display: swap; }
+@font-face { font-family: "Fell"; font-style: italic; src: url(/static/vendor/fonts/imfellenglish-400-italic.woff2) format("woff2"); font-display: swap; }
+@font-face { font-family: "Oswald"; font-weight: 700; src: url(/static/vendor/fonts/oswald-700.woff2) format("woff2"); font-display: swap; }
+@font-face { font-family: "Orbitron"; font-weight: 700; src: url(/static/vendor/fonts/orbitron-700.woff2) format("woff2"); font-display: swap; }
+@font-face { font-family: "Fredoka"; font-weight: 600; src: url(/static/vendor/fonts/fredoka-600.woff2) format("woff2"); font-display: swap; }
+
+/* stage, the default: a velvet curtain under an amber follow-spot, billed in condensed poster type */
+:root, [data-look="stage"] {
+  --bg: #1B1222; --surface: #2A1D33; --line: #3E2D4A;
+  --fg: #F7EFE6; --muted: #BBA9C6;
+  --accent: #FFB13B; --on-accent: #1B1222;
+  --paper: #F7EFE6; --on-paper: #1B1222; --danger: #9E2A2B;
+  --display-font: "Oswald", "Arial Narrow", sans-serif;
+  --body-font: "Atkinson", system-ui, sans-serif;
+  --quote-style: normal;  /* taglines and lyric lines: italic only where the face has a real italic */
+  color-scheme: dark;
+}
+/* pub: bottle green and brass, the head on a pint, an old engraved serif */
+[data-look="pub"] {
+  --bg: #0F2A20; --surface: #17392B; --line: #2A4D3D;
+  --fg: #EFE3C8; --muted: #8FA897;
+  --accent: #C9A045; --on-accent: #0F2A20;
+  --paper: #EFE3C8; --on-paper: #0F2A20; --danger: #8C3B2A;
+  --display-font: "Fell", Georgia, serif;
+  --quote-style: italic;
+}
+/* neon: a late-night sign, hot pink on deep indigo */
+[data-look="neon"] {
+  --bg: #15102C; --surface: #221A44; --line: #352B62;
+  --fg: #F5F2FF; --muted: #ABA4D4;
+  --accent: #FF4FB8; --on-accent: #15102C;
+  --paper: #F5F2FF; --on-paper: #15102C; --danger: #A1173F;
+  --display-font: "Orbitron", sans-serif;
+}
+/* daylight: a café afternoon, cobalt ink on a pale sky */
+[data-look="daylight"] {
+  --bg: #E7EDF6; --surface: #FFFFFF; --line: #C6D1E2;
+  --fg: #16203A; --muted: #4B5873;
+  --accent: #2347D6; --on-accent: #FFFFFF;
+  --paper: #FFFFFF; --on-paper: #16203A; --danger: #A32020;
+  --display-font: "Fredoka", system-ui, sans-serif;
+  color-scheme: light;
+}

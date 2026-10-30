@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B1222">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
+<title>Karaoke staff</title>
+<link rel="stylesheet" href="/static/looks.css">
+<script src="/static/look.js"></script>
+<link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 data-t="title"></h1>
+    <div class="lang" role="group" aria-label="Language / Sprache">
+      <button type="button" data-lang="en">EN</button>
+      <button type="button" data-lang="de">DE</button>
+    </div>
+  </header>
+
+  <section class="lock" id="lock">
+    <p data-t="pinText"></p>
+    <form id="pinForm">
+      <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" data-tp="pin">
+      <button class="btn main" data-t="unlock"></button>
+    </form>
+  </section>
+
+  <main id="panel" hidden>
+    <section class="stage" aria-live="polite">
+      <p class="who" id="who"></p>
+      <p class="what" id="what"></p>
+      <div class="buttons">
+        <button type="button" class="btn main" id="skip" data-t="skip"></button>
+        <button type="button" class="btn" id="pause"></button>
+      </div>
+      <div class="slider">
+        <label for="help" data-t="help"></label><output id="helpOut" for="help"></output>
+        <input id="help" type="range" min="0" max="100" step="5">
+        <small data-t="helpNote"></small>
+      </div>
+      <div class="slider">
+        <label for="vol" data-t="volume"></label><output id="volOut" for="vol"></output>
+        <input id="vol" type="range" min="0" max="100" step="5">
+      </div>
+      <div class="nudge" role="group" aria-labelledby="nudgeLabel">
+        <span id="nudgeLabel" data-t="lyricsTiming"></span><output id="nudgeOut"></output>
+        <div class="buttons">
+          <button type="button" class="btn" id="earlier" data-t="earlier"></button>
+          <button type="button" class="btn" id="later" data-t="later"></button>
+        </div>
+        <small data-t="nudgeNote"></small>
+      </div>
+    </section>
+
+    <details class="settings" id="venue">
+      <summary data-t="venue"></summary>
+      <div class="field"><label for="venueName" data-t="venueName"></label><input id="venueName" class="text" maxlength="40" autocomplete="off"></div>
+      <fieldset class="looks"><legend data-t="lookPick"></legend><div id="looks"></div></fieldset>
+      <div class="field"><label for="accent" data-t="accent"></label>
+        <div class="buttons"><input id="accent" type="color"><button type="button" class="btn" id="accentReset" data-t="accentReset"></button></div></div>
+      <div class="field"><label for="icon" data-t="icon"></label><input id="icon" class="text icon" maxlength="8" autocomplete="off"><small class="sub" data-t="iconNote"></small></div>
+      <fieldset class="langs"><legend data-t="shelvesPick"></legend><div id="shelfBoxes"></div></fieldset>
+    </details>
+
+    <details class="settings" id="screen">
+      <summary data-t="screen"></summary>
+      <div class="field"><label for="set-layout" data-t="layout"></label><select id="set-layout" data-key="layout"></select></div>
+      <div class="field"><label for="set-highlight" data-t="highlight"></label><select id="set-highlight" data-key="highlight"></select></div>
+      <div class="field"><label for="set-size" data-t="size"></label><select id="set-size" data-key="size"></select></div>
+      <div class="field"><label for="set-position" data-t="position"></label><select id="set-position" data-key="position"></select></div>
+      <div class="field"><label for="set-theme" data-t="theme"></label><select id="set-theme" data-key="theme"></select></div>
+      <label class="check"><input type="checkbox" data-key="next_line"><span data-t="nextLine"></span></label>
+      <label class="check"><input type="checkbox" data-key="dots"><span data-t="dots"></span></label>
+      <label class="check"><input type="checkbox" data-key="band"><span data-t="band"></span></label>
+      <div class="slider">
+        <label for="delay" data-t="delay"></label><output id="delayOut" for="delay"></output>
+        <input id="delay" type="range" min="-500" max="500" step="10">
+        <small data-t="delayNote"></small>
+      </div>
+      <div class="buttons">
+        <button type="button" class="btn" id="syncTest"></button>
+        <a class="btn" id="preview" target="_blank" rel="noopener" data-t="preview"></a>
+      </div>
+    </details>
+
+    <details class="settings" id="rules">
+      <summary data-t="rules"></summary>
+      <div class="field"><label for="set-songs_per_singer" data-t="perSinger"></label><select id="set-songs_per_singer" data-key="songs_per_singer" data-top="1"></select></div>
+      <label class="check"><input type="checkbox" data-key="hide_explicit" data-top="1"><span data-t="hideExplicit"></span></label>
+      <label class="check"><input type="checkbox" data-key="auto_download" data-top="1"><span data-t="autoDownload"></span></label>
+      <div class="field"><label for="set-library_max_gb" data-t="diskLimit"></label><select id="set-library_max_gb" data-key="library_max_gb" data-top="1"></select></div>
+      <fieldset class="langs"><legend data-t="languages"></legend><div id="langs"></div></fieldset>
+    </details>
+
+    <details class="settings" id="songCare">
+      <summary data-t="songCare"></summary>
+      <p id="makingNow"></p>
+      <p class="sub" id="nextUp"></p>
+      <h3 data-t="weakTitle"></h3>
+      <small class="sub" data-t="weakNote"></small>
+      <ul class="care" id="weakList"></ul>
+      <h3 data-t="failedTitle"></h3>
+      <ul class="care" id="failedList"></ul>
+      <p class="sub" id="disk"></p>
+    </details>
+    <h2 id="nextTitle"></h2>
+    <ol class="queue" id="queue"></ol>
+  </main>
+</div>
+<div class="toast" id="toast" role="alert"></div>
+
+<script src="/static/admin.js"></script>
+</body>
+</html>

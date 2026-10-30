@@ -1,0 +1,23 @@
+# this venue's own files: settings (PIN, Wi-Fi password), songs, queue and history
+settings.json
+library/
+state.json
+history.json
+catalog-status.json
+wishes.txt
+needs-attention.txt
+top-songs.txt
+work/
+tools/
+*.tmp
+
+# Python and tools
+.venv/
+.venv-maker/
+__pycache__/
+*.pyc
+.pytest_cache/
+.playwright-mcp/
+.tv-profile/
+.superpowers/
+docs/superpowers/

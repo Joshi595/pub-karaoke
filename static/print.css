@@ -1,0 +1,33 @@
+:root { --ink: #1B1B1B; --rule: #C9D3CC; }
+@page { size: A4 portrait; margin: 0; }
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--ink); font: 10.5pt/1.4 var(--body-font); background: #e8ebe9; color-scheme: light; }
+.page { width: 210mm; height: 297mm; overflow: hidden; background: #fff; margin: 16px auto; box-shadow: 0 2px 12px #0002; }
+/* four A6 table cards per A4 sheet; the dashed lines are where to cut */
+.cards { display: grid; grid-template-columns: 105mm 105mm; grid-template-rows: 148.5mm 148.5mm; }
+.card { padding: 8mm; outline: .2mm dashed #b5bdb8; overflow: hidden; }
+.sheet { padding: 10mm 14mm; break-before: page; font-size: 9pt; line-height: 1.32; }
+@media print { body { background: none; } .page { margin: 0; box-shadow: none; } .noprint { display: none; } }
+h1 { font: 400 22pt/1.05 var(--display-font); color: var(--on-paper); margin: 0; }
+.sub { font: var(--quote-style) 11pt var(--display-font); margin: 1mm 0 4mm; }
+.qrs { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+.qrs figure { margin: 0; text-align: center; }
+.qrs svg { width: 100%; height: auto; display: block; }
+.qrs figcaption { font-size: 8pt; margin-top: 1mm; word-break: break-all; }
+ol.steps { margin: 4mm 0 0; padding-left: 5mm; }
+ol.steps li { margin-bottom: 1.5mm; }
+.de { color: #4F5560; }
+.rules { margin-top: 3mm; padding-top: 2.5mm; border-top: 1px solid var(--rule); font-size: 9pt; }
+.rules p { margin: 0 0 1mm; }
+.sheet h1 { font-size: 26pt; }
+.sheet h2 { font: 400 14pt var(--display-font); color: var(--on-paper); margin: 4.5mm 0 1.5mm; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
+.sheet ol { padding-left: 5mm; margin: 0; }
+.sheet li { margin-bottom: 1mm; }
+table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+th, td { text-align: left; vertical-align: top; padding: 1.4mm 2mm 1.4mm 0; border-bottom: 1px solid var(--rule); }
+th { width: 25%; }
+.pin { margin-top: 3mm; font-weight: 700; }
+.pin span { display: inline-block; width: 40mm; border-bottom: 1px solid var(--ink); }
+.noprint { text-align: center; padding: 12px; font-size: 14px; }
+.noprint button { font: inherit; padding: 8px 18px; }

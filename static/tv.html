@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
+<title>Karaoke TV</title>
+<link rel="stylesheet" href="/static/looks.css">
+<script src="/static/look.js"></script>
+<link rel="stylesheet" href="/static/tv.css">
+<script src="/static/vendor/p5.min.js"></script>
+<script src="/static/vendor/qrcode.js"></script>
+<script src="/static/themes.js"></script>
+</head>
+<body>
+<div id="bg" aria-hidden="true"></div>
+
+<section class="scene" id="lobby">
+  <h1 class="shade" id="pub">Karaoke</h1>
+  <div class="join shade">
+    <div>
+      <p class="big">Scan to sing<br>Scannen &amp; singen</p>
+      <div class="qr" id="joinQr"></div>
+      <p id="joinUrl"></p>
+    </div>
+    <div class="wifi" id="wifi" hidden>
+      <p class="big">Wi-Fi / WLAN</p>
+      <div class="qr" id="wifiQr"></div>
+      <p id="wifiText"></p>
+    </div>
+  </div>
+  <div class="lineup shade">
+    <h2>Next up / Als Nächstes</h2>
+    <ol id="lineup"></ol>
+    <p class="prep" id="prep" hidden></p>
+    <p class="free" id="free">The stage is free. Scan the code and pick a song!<br>Die Bühne ist frei. Code scannen und Song aussuchen!</p>
+  </div>
+</section>
+
+<section class="scene shade" id="upnext" hidden>
+  <p class="who" id="upWho"></p>
+  <p class="call">Get to the mic! / Ab ans Mikro!</p>
+  <p class="song" id="upSong"></p>
+  <p class="count" id="upCount"></p>
+  <div class="qrcorner"><div class="qr" id="upQr"></div></div>
+</section>
+
+<section class="scene" id="singing" hidden>
+  <div id="title" class="shade"><p class="t" id="tTitle"></p><p class="a" id="tArtist"></p><p class="s" id="tSinger"></p></div>
+  <div id="gap" class="shade" hidden>♪<div class="bar"><i id="gapBar"></i></div></div>
+  <div id="lyrics"><div id="dots"></div><div id="lines"></div><span id="ball" hidden></span></div>
+  <div class="bottom shade">
+    <span class="singer" id="barSinger"></span>
+    <div><span id="barSong"></span><div class="progress"><i id="barProgress"></i></div></div>
+    <span class="next" id="barNext"></span>
+    <div class="qr" id="barQr"></div>
+  </div>
+</section>
+
+<section class="scene" id="video" hidden></section>
+
+<section class="scene shade" id="synctest" hidden>
+  <div id="flash"></div>
+  <p>Sync test: move <strong>Screen delay</strong> on the staff phone until the flash lands on the click.</p>
+  <p>Synchrontest: <strong>Bildverzögerung</strong> am Personal-Handy verschieben, bis Blitz und Klick zusammenfallen.</p>
+  <p class="delay" id="syncDelay"></p>
+</section>
+
+<section class="scene shade" id="applause" hidden>
+  <p>Applause for / Applaus für</p>
+  <p class="who" id="clapWho"></p>
+</section>
+
+<div id="start" hidden>Click or press any key to start the karaoke screen<br>Klicken oder Taste drücken, um den Karaoke-Bildschirm zu starten</div>
+<script src="/static/tv.js"></script>
+</body>
+</html>

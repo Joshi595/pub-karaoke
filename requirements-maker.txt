@@ -1,0 +1,6 @@
+# The song maker (make_songs.py), the same on every computer. setup.bat / setup.sh add what depends on the machine:
+# torch and the vocal remover, built for an NVIDIA graphics card if there is one (see the top of setup.bat).
+yt-dlp==2026.10.26  # YouTube changes often: if downloads fail, run: pip install -U yt-dlp
+stable-ts==2.19.1
+requests==2.34.2
+audioread==3.1.0

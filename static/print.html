@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8E%A4%3C/text%3E%3C/svg%3E">
+<title>Karaoke printables</title>
+<link rel="stylesheet" href="/static/looks.css">
+<script src="/static/look.js"></script>
+<link rel="stylesheet" href="/static/print.css">
+<script src="/static/vendor/qrcode.js"></script>
+</head>
+<body>
+<p class="noprint"><button id="printBtn">Print / Drucken</button> Page 1: four table cards to cut out. Page 2: staff sheet. / Seite 1: vier Tischkarten zum Ausschneiden. Seite 2: Personal-Blatt.</p>
+
+<section class="page cards" id="cards">
+<div class="card" id="card">
+  <h1 class="pub">Karaoke</h1>
+  <p class="sub">Sing tonight! / Sing heute Abend mit!</p>
+  <div class="qrs">
+    <figure id="wifiFig"><div id="wifiQr"></div><figcaption>1. Wi-Fi / WLAN<br><span id="wifiCap"></span></figcaption></figure>
+    <figure><div id="joinQr"></div><figcaption>2. Karaoke<br><span id="joinCap"></span></figcaption></figure>
+  </div>
+  <ol class="steps">
+    <li>Join the Wi-Fi here. <span class="de">Verbinde dich hier mit dem WLAN.</span></li>
+    <li>Scan the karaoke code. <span class="de">Scanne den Karaoke-Code.</span></li>
+    <li>Type your name and pick a song, then watch the TV for your name. <span class="de">Namen eingeben, Song aussuchen und auf den Fernseher achten.</span></li>
+  </ol>
+  <div class="rules">
+    <p id="ruleLimit"></p>
+    <p id="ruleReady"></p>
+  </div>
+</div>
+</section>
+
+<section class="page sheet">
+  <h1>Karaoke: staff sheet</h1>
+  <p class="sub">For the bar. Guests run the queue themselves; you only step in when something goes wrong.</p>
+  <div class="cols">
+    <div>
+      <h2>Start the night</h2>
+      <ol>
+        <li>Switch on the TV and the sound system.</li>
+        <li>On the karaoke laptop, double-click <b>Pub Karaoke</b> on the desktop.</li>
+        <li>The TV shows the welcome screen with the QR codes. That's it.</li>
+      </ol>
+      <h2>Your staff phone</h2>
+      <ol>
+        <li>Open <b id="adminUrl"></b> on your phone (on the Wi-Fi here).</li>
+        <li>Enter the staff PIN.</li>
+        <li><b>Skip</b> (tap twice): singer not there, or the song is a mess.</li>
+        <li><b>Help vocals</b>: turn up for nervous singers, down if the original singer is too loud.</li>
+        <li><b>Play next</b>: let someone go first (birthdays!). <b>Remove</b> takes a song out.</li>
+        <li><b>Lyrics earlier / later</b>: if the words light up before or after the singing. Saved for that song.</li>
+      </ol>
+      <p class="pin">PIN: <span></span></p>
+      <h2>End of the night</h2>
+      <p>Close the TV screen with <b>Alt+F4</b> and close the small black server window. Tomorrow the queue starts fresh.</p>
+    </div>
+    <div>
+      <h2>Den Abend starten</h2>
+      <ol>
+        <li>Fernseher und Musikanlage einschalten.</li>
+        <li>Auf dem Karaoke-Laptop <b>Pub Karaoke</b> auf dem Desktop doppelklicken.</li>
+        <li>Der Fernseher zeigt den Startbildschirm mit den QR-Codes. Fertig.</li>
+      </ol>
+      <h2>Dein Personal-Handy</h2>
+      <ol>
+        <li><b id="adminUrlDe"></b> im Handy öffnen (im WLAN hier).</li>
+        <li>Personal-PIN eingeben.</li>
+        <li><b>Überspringen</b> (zweimal tippen): Sänger nicht da oder Song klappt nicht.</li>
+        <li><b>Hilfsgesang</b>: lauter für nervöse Sänger, leiser, wenn der Originalgesang stört.</li>
+        <li><b>Als Nächstes</b>: jemanden vorziehen (Geburtstag!). <b>Entfernen</b> nimmt einen Song raus.</li>
+        <li><b>Text früher / später</b>: wenn die Wörter vor oder nach dem Gesang aufleuchten. Wird für den Song gespeichert.</li>
+      </ol>
+      <h2>Ende des Abends</h2>
+      <p>Fernsehbild mit <b>Alt+F4</b> schließen und das kleine schwarze Server-Fenster schließen. Am nächsten Tag startet die Warteschlange neu.</p>
+    </div>
+  </div>
+  <h2>If something goes wrong / Wenn etwas nicht klappt</h2>
+  <table>
+    <tr><th>Phones can't open the karaoke page</th><td>Guests must be on the Wi-Fi here, not mobile data (unless the internet link is on). If nobody can connect: check the laptop is on the guest Wi-Fi, then restart it with the desktop icon.<br><span class="de">Gäste müssen hier im WLAN sein, nicht im Mobilnetz (außer der Internet-Link ist an). Geht bei niemandem: Laptop im Gast-WLAN? Dann über das Desktop-Symbol neu starten.</span></td></tr>
+    <tr><th>TV says "Click to start"</th><td>Click once on the TV picture with the laptop mouse.<br><span class="de">Einmal mit der Laptop-Maus auf das Fernsehbild klicken.</span></td></tr>
+    <tr><th>No sound</th><td>Check the staff page isn't paused and Volume isn't at 0, then the laptop volume, then the cable to the sound system.<br><span class="de">Personal-Seite nicht pausiert, Lautstärke nicht auf 0? Dann Laptop-Lautstärke, dann das Kabel zur Anlage.</span></td></tr>
+    <tr><th>Screen frozen</th><td>Press Alt+F4 on the laptop, then double-click the desktop icon again. Nobody loses their place.<br><span class="de">Alt+F4 drücken, dann das Desktop-Symbol wieder doppelklicken. Niemand verliert seinen Platz.</span></td></tr>
+    <tr><th>A song sounds wrong</th><td>Skip it. On the staff page, under <b>Songs</b>, delete it: the next guest who picks it gets a fresh one.<br><span class="de">Überspringen. Auf der Personal-Seite unter <b>Songs</b> löschen: wer ihn das nächste Mal wählt, bekommt ihn neu gemacht.</span></td></tr>
+    <tr><th>Words always a bit late or early</th><td>Staff page → <b>TV screen</b> → <b>Start sync test</b>. Move <b>Screen delay</b> until the flash lands on the click, then stop the test. Once is enough.<br><span class="de">Personal-Seite → <b>Fernseher</b> → <b>Synchrontest starten</b>. <b>Bildverzögerung</b> verschieben, bis Blitz und Klick zusammenfallen, dann Test beenden. Einmal reicht.</span></td></tr>
+    <tr><th>"Getting Anna's song ready…"</th><td>A new song takes 2–3 minutes to make. Singers whose songs are ready go first; Anna keeps her place.<br><span class="de">Ein neuer Song braucht 2–3 Minuten. Wer einen fertigen Song hat, singt zuerst; Anna behält ihren Platz.</span></td></tr>
+    <tr><th>Internet is down</th><td>Songs marked Ready still work. New songs can't be made until it's back.<br><span class="de">Songs mit „Bereit“ gehen weiter. Neue Songs erst wieder, wenn das Internet zurück ist.</span></td></tr>
+  </table>
+</section>
+
+<script src="/static/print.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# gitleaks: the default rules, minus one known false alarm.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "p5.js, minified and unchanged: method names like key:\"calculateRemainder2D\" look like API keys"
+paths = ['''(^|[/\\])static[/\\]vendor[/\\]p5\.min\.js$''']

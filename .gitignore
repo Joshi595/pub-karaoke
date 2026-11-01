@@ -1,5 +1,6 @@
 # this venue's own files: settings (PIN, Wi-Fi password), songs, queue and history
 settings.json
+logo-*
 library/
 state.json
 history.json

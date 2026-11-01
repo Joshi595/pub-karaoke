@@ -602,10 +602,130 @@ def test_staff_set_the_venue_look_but_nothing_unsafe(client):
     ok = {"look": "neon", "accent": "#ff3366", "icon": "🎸", "pub_name": "Bar & Grill", "shelves": ["ready", "irish"]}
     assert client.post("/api/admin/settings", json=ok, headers=pin).status_code == 200
     st = client.get("/api/state").json
-    assert st["look"] == {"look": "neon", "accent": "#ff3366", "icon": "🎸"} and st["shelves"] == ["ready", "irish"]
+    assert st["look"] == {"look": "neon", "accent": "#ff3366", "icon": "🎸", "logo": "", "logos": [], "night": ""} and st["shelves"] == ["ready", "irish"]
+    assert client.post("/api/admin/settings", json={"look": "halloween", "display": {"theme": "halloween"}}, headers=pin).status_code == 200
     for bad in ({"accent": "red;background:url(x)"}, {"icon": "<svg>"}, {"shelves": ["nope"]}, {"shelves": [["ready"]]},
-                {"look": "matrix"}, {"pub_name": " "}, {"pin": "0000"}):
+                {"look": "matrix"}, {"pub_name": " "}, {"pin": "0000"}, {"logo": "../settings.json"}):
         assert client.post("/api/admin/settings", json=bad, headers=pin).status_code == 400, bad
+
+
+def test_staff_start_the_song_again(client):
+    pin = {"X-Pin": "9999"}
+    restart = lambda entry_id, headers=pin: client.post("/api/admin/restart", json={"id": entry_id}, headers=headers)
+    assert restart("x").json["ok"] is False  # nothing playing
+    client.post("/api/queue", json={"name": "Anna", "device": "d1", "song_id": "a-b"})
+    e = client.post("/api/next", json={}).json["entry"]
+    assert e["restarts"] == 0
+    client.post("/api/admin/pause", json={"paused": True}, headers=pin)
+    assert restart(e["id"], {"X-Pin": "0000"}).status_code == 403
+    assert restart("the-song-before").json["ok"] is False  # a late second tap must not restart the next singer
+    assert restart(e["id"]).json["ok"] is True
+    st = client.get("/api/state").json
+    assert st["now_playing"]["restarts"] == 1 and st["paused"] is False  # starting again means playing
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + bytes(64)
+
+
+def test_staff_upload_logos_for_every_look_or_one(client, tmp_path):
+    pin = {"X-Pin": "9999"}
+    up = lambda data, look="", headers=pin: client.post(f"/api/admin/logo?look={look}", data=data, headers={**headers, "Content-Type": "image/png"})
+    look = lambda: client.get("/api/state").json["look"]
+    assert up(PNG, headers={"X-Pin": "0000"}).status_code == 403
+    assert up(b'<svg onload="alert(1)"/>').status_code == 400 and up(b"hello").status_code == 400
+    assert up(PNG + bytes(1_000_000)).status_code == 413 and up(PNG, "matrix").status_code == 400
+    assert up(PNG).status_code == 200  # for every look
+    every = look()["logo"]
+    r = client.get(every)
+    assert r.data == PNG and r.mimetype == "image/png"
+    r.close()  # the download is over, as it is for a phone
+    jpg = b"\xff\xd8\xff" + bytes(64)
+    assert up(jpg, "halloween").status_code == 200 and up(jpg, "halloween").status_code == 200  # two of Halloween's own
+    assert look()["logos"] == [every]  # tonight isn't Halloween: the logo for every look
+    client.post("/api/admin/tonight", json={"look": "halloween"}, headers=pin)
+    spooky = look()["logos"]
+    assert len(spooky) == 2 and every not in spooky and look()["logo"] == spooky[0]
+    files = [e["file"] for e in client.get("/api/state").json["logos"]]
+    assert len(set(files)) == 3 and len(list(tmp_path.glob("logo-*"))) == 3
+    assert client.delete("/api/admin/logo", json={"file": files[1]}, headers=pin).status_code == 200
+    assert look()["logos"] == [spooky[1]] and client.get(spooky[0]).status_code == 404 and len(list(tmp_path.glob("logo-*"))) == 2
+    assert client.get("/logo/settings.json").status_code == 404 and client.get("/logo/..%2Fsettings.json").status_code == 404
+    for _ in range(10):
+        up(PNG)
+    assert up(PNG).status_code == 400  # 12 at most
+
+
+def test_one_logo_from_before_becomes_the_logo_for_every_look(tmp_path):
+    (tmp_path / "settings.json").write_text(json.dumps({"pin": "9999", "logo": "logo-1.jpg"}))
+    (tmp_path / "static").mkdir()
+    (tmp_path / "logo-1.jpg").write_bytes(b"\xff\xd8\xff")
+    c = create_app(tmp_path).test_client()
+    assert c.get("/api/state").json["logos"] == [{"file": "logo-1.jpg", "look": ""}]
+    r = c.get("/logo/logo-1.jpg")
+    assert r.status_code == 200
+    r.close()
+
+
+from datetime import date, datetime
+
+from app import night_look, nights, tonight
+
+
+def test_special_nights_switch_the_look_by_date():
+    special = [{"date": "2026-10-31", "look": "halloween", "yearly": True}, {"date": "2026-11-14", "look": "neon", "yearly": False}]
+    assert night_look(special, date(2027, 10, 31)) == "halloween"  # every year
+    assert night_look(special, date(2026, 11, 14)) == "neon" and night_look(special, date(2027, 11, 14)) == ""  # just the once
+    assert night_look(special, date(2026, 11, 1)) == ""
+    assert tonight(datetime(2026, 11, 1, 1, 30)) == date(2026, 10, 31)  # half past one is still Halloween night
+    assert tonight(datetime(2026, 11, 1, 7)) == date(2026, 11, 1)
+    assert nights(special) == special and nights([]) == []
+    for bad in ([{"date": "2026-02-30", "look": "halloween", "yearly": True}], [{"date": "20261031", "look": "halloween", "yearly": True}],
+                [{"date": "2026-10-31", "look": "matrix", "yearly": True}], [{"date": "2026-10-31", "look": "halloween", "yearly": "yes"}],
+                [{"date": "2026-10-31", "look": "halloween", "yearly": True, "x": 1}], [{"date": "2026-10-31", "look": ["pub"], "yearly": True}],
+                special * 26, "halloween", [None]):
+        assert nights(bad) is None, bad
+
+
+def test_tonights_special_night_reaches_every_page(client):
+    pin = {"X-Pin": "9999"}
+    client.post("/api/admin/settings", json={"look": "pub", "accent": "#d4af37"}, headers=pin)
+    assert client.get("/api/state").json["look"]["night"] == ""
+    day = tonight(datetime.now()).isoformat()
+    assert client.post("/api/admin/settings", json={"nights": [{"date": day, "look": "halloween", "yearly": False}]}, headers=pin).status_code == 200
+    look = client.get("/api/state").json["look"]
+    assert look["night"] == "halloween" and look["look"] == "pub" and look["accent"] == "#d4af37"  # the staff page still sees its own
+    assert client.post("/api/admin/settings", json={"nights": [{"date": day, "look": "matrix", "yearly": False}]}, headers=pin).status_code == 400
+
+
+def test_staff_pick_tonights_theme(client):
+    pin = {"X-Pin": "9999"}
+    pick = lambda look, headers=pin: client.post("/api/admin/tonight", json={"look": look}, headers=headers)
+    state = lambda: client.get("/api/state").json
+    day = tonight(datetime.now())
+    client.post("/api/admin/settings", json={"look": "pub"}, headers=pin)
+    assert pick("halloween").status_code == 200
+    assert state()["look"]["night"] == "halloween" and state()["nights"] == [{"date": day.isoformat(), "look": "halloween", "yearly": False}]
+    assert pick("pub").status_code == 200 and state()["nights"] == [] and state()["look"]["night"] == ""  # the everyday look again
+    yearly = {"date": day.isoformat(), "look": "halloween", "yearly": True}  # e.g. Halloween, every year
+    client.post("/api/admin/settings", json={"nights": [yearly]}, headers=pin)
+    assert pick("pub").status_code == 200 and state()["look"]["night"] == "pub"  # tonight only, ahead of the yearly night
+    assert pick("halloween").status_code == 200 and state()["nights"] == [yearly]
+    assert pick("matrix").status_code == 400 and pick(["pub"]).status_code == 400 and pick("pub", {"X-Pin": "0000"}).status_code == 403
+    client.post("/api/admin/settings", json={"nights": [yearly] * 50}, headers=pin)
+    assert pick("neon").status_code == 400  # the calendar is full
+
+
+def test_tonights_theme_everywhere_and_pages_see_updates(client):
+    pin = {"X-Pin": "9999"}
+    assert client.post("/api/admin/settings", json={"display": {"theme": "venue"}}, headers=pin).status_code == 200
+    st = client.get("/api/state").json
+    assert st["display"]["theme"] == "venue" and st["version"] and client.get("/api/state").json["version"] == st["version"]
+
+
+def test_broken_special_nights_in_the_file_dont_break_the_pages(tmp_path):
+    (tmp_path / "settings.json").write_text(json.dumps({"pin": "9999", "nights": [{"date": "31.10."}]}))
+    (tmp_path / "static").mkdir()
+    assert create_app(tmp_path).test_client().get("/api/state").json["look"]["night"] == ""
 
 
 def test_values_of_the_wrong_type_get_a_clean_no(client):

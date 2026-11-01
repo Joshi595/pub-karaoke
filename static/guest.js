@@ -95,7 +95,7 @@ let state = null, pendingSong = null;
 let view = { kind: "shelf", shelf: "ready", page: 0 }, rows = [], artists = [], hasMore = false, seq = 0;
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const t = () => T[lang];
+const t = () => voiced(T[lang], lang);  // in tonight's voice, when staff want the theme everywhere (look.js)
 
 function toast(msg, bad) {
   const box = $("toast");
@@ -246,6 +246,10 @@ function renderState() {
   document.title = state.pub_name;
   $("pub").textContent = state.pub_name;
   applyVenueLook(state.look);
+  const before = voice;
+  useVoice(state);
+  if (voice !== before) return applyLang();  // tonight's words changed: every text again (applyLang comes back here)
+  themeBanner($("banner"), state.display.theme === "venue" && (state.look.night || state.look.look));  // tonight's theme, as on the TV
   if (String(state.shelves) !== renderState.shelves) { renderState.shelves = String(state.shelves); renderChips(); }
   const stage = $("stage");
   const np = state.now_playing;
@@ -349,6 +353,7 @@ async function poll() {
   try {
     state = await api("GET", `/api/state?device=${encodeURIComponent(device)}`);
     renderState();
+    reloadIfUpdated(state.version, !document.querySelector("dialog[open]") && !document.activeElement?.matches("input, textarea"));
     const mine = state.queue.filter(e => e.mine).map(e => e.song.title).join();
     if (mine !== poll.mine) { poll.mine = mine; renderList(); }  // redraw the list only when its badges change, so taps aren't lost
   } catch { /* the next poll retries */ }

@@ -35,6 +35,7 @@
       <p class="what" id="what"></p>
       <div class="buttons">
         <button type="button" class="btn main" id="skip" data-t="skip"></button>
+        <button type="button" class="btn" id="restart" data-t="restart"></button>
         <button type="button" class="btn" id="pause"></button>
       </div>
       <div class="slider">
@@ -56,13 +57,28 @@
       </div>
     </section>
 
+    <section class="theme" aria-labelledby="themeTitle">
+      <h2 id="themeTitle" data-t="themeTitle"></h2>
+      <div class="banner" id="themeBanner" aria-hidden="true"><img class="logo" alt=""></div>
+      <select id="tonightLook" aria-labelledby="themeTitle"></select>
+      <p class="sub" id="tonightNote"></p>
+      <label class="check"><input type="checkbox" id="everywhere"><span data-t="everywhere"></span></label>
+    </section>
+
     <details class="settings" id="venue">
       <summary data-t="venue"></summary>
       <div class="field"><label for="venueName" data-t="venueName"></label><input id="venueName" class="text" maxlength="40" autocomplete="off"></div>
       <fieldset class="looks"><legend data-t="lookPick"></legend><div id="looks"></div></fieldset>
+      <fieldset class="nights"><legend data-t="nights"></legend><small class="sub" data-t="nightsNote"></small>
+        <ul id="nights"></ul><button type="button" class="btn" id="addNight" data-t="addNight"></button></fieldset>
       <div class="field"><label for="accent" data-t="accent"></label>
         <div class="buttons"><input id="accent" type="color"><button type="button" class="btn" id="accentReset" data-t="accentReset"></button></div></div>
       <div class="field"><label for="icon" data-t="icon"></label><input id="icon" class="text icon" maxlength="8" autocomplete="off"><small class="sub" data-t="iconNote"></small></div>
+      <fieldset class="logos"><legend data-t="logo"></legend>
+        <ul id="logos"></ul>
+        <label for="logoLook" data-t="logoFor"></label><select id="logoLook"></select>
+        <input id="logoFile" type="file" accept="image/jpeg,image/png,image/webp" data-tl="logoFile">
+        <small class="sub" data-t="logoNote"></small></fieldset>
       <fieldset class="langs"><legend data-t="shelvesPick"></legend><div id="shelfBoxes"></div></fieldset>
     </details>
 

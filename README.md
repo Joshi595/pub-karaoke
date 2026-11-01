@@ -24,7 +24,7 @@ Nobody has to sit at the laptop.
 - **Self-service queue.** Guests pick from about 90,000 songs, and the search forgives typos ("bohemain rapsody"), missing accents and word order. The order is fair: whoever has sung least goes next. Staff can skip, reorder and remove from their phone.
 - **Songs made on demand.** A song nobody has picked before is made in 2–3 minutes (with an NVIDIA graphics card), before that guest's turn. While the laptop is idle, it makes the songs your venue is likely to want.
 - **Lyrics in time.** The song maker listens to the separated vocals and times every word against the singing. Staff can move a song's lyrics earlier or later, and one sync test sets the TV's delay.
-- **Your venue's look.** Four looks to choose from (stage, pub, neon, daylight), plus your own name, accent colour, icon and the song lists phones show. Each song also gets its own animated background on the TV.
+- **Your venue's look.** Five looks to choose from (stage, pub, neon, daylight, Halloween), plus your own name, logo, accent colour, icon and the song lists phones show. Special nights switch the look by date, by themselves. Each song also gets its own animated background on the TV.
 - **Works on any Wi-Fi.** Phones connect straight to the laptop, or through a free internet link when the Wi-Fi keeps devices apart.
 - **Offline once made.** Songs already made play without internet.
 - **English and German** on the phones, picked from the phone's language.
@@ -77,7 +77,17 @@ cd pub-karaoke
 
 ## Make it yours
 
-Everything here is on the staff page under **Venue look**, and saved in `settings.json`:
+**Tonight's theme** is the card near the top of the staff page. It shows tonight's theme as a moving preview, and changes it for tonight only: from 6 am the everyday look is back. Tick *Use it for every song on the TV and on the guests' phones too* for one theme all night: every song on the TV gets one of that theme's scenes (instead of one matching the song), a different one each time, and guests' phones show the theme's first scene at the top, with your logo in it. The words follow the theme too, on the TV, the phones, the table cards and the staff page: on Halloween the TV says "Scan if you dare" and calls singers with "Rise up and grab the mic!"; the Pub look talks like an Irish pub ("Next round", "Sláinte! A big hand for…"). The other looks keep the usual words. The scenes of each look:
+
+| Look | Scenes |
+|---|---|
+| Stage | night sky, embers, album colours |
+| Pub | gold swirl with shamrocks, Celtic knot, green hills under a rainbow, harp strings |
+| Neon | 80s sunset grid, disco ball |
+| Daylight | candy blobs, album colours |
+| Halloween | moonlit hills with pumpkins, graveyard ghosts, spider webs, witch's cauldron |
+
+Everything else is on the staff page under **Venue look**, and saved in `settings.json`:
 
 - **Name on the screens:** shown on the TV, the phones and the table cards.
 - **Look:**
@@ -85,15 +95,18 @@ Everything here is on the staff page under **Venue look**, and saved in `setting
   - *Pub*: bottle green and brass.
   - *Neon*: a late-night sign.
   - *Daylight*: bright, for daytime.
+  - *Halloween*: pumpkins, bats and a full moon. On the TV it brings its own animated backdrop for every song.
+- **Special nights:** pick a date and a look, once or every year. On that date every screen (TV, phones, table cards) switches to that look by itself, from 6 am until 6 am the next morning, then goes back to your everyday look. Your accent colour is left out on those nights so it doesn't clash.
 - **Accent colour:** your own colour, over any look. Text on it switches between dark and light to stay readable.
 - **Icon:** one emoji, shown in browser tabs.
+- **Logos:** JPG, PNG or WebP pictures up to 1 MB, shown with your name on the TV (also beside the singer's name during songs), the phones and the table cards. Each is framed like a lit sign in the look's accent colour, so any logo fits any look. A look can have logos of its own, such as Halloween versions of yours: on those nights they show instead, and with several, the TV changes to another one with each song.
 - **Song lists on guests' phones:** choose from Ready now, Popular here, Top hits, Crowd favourites, Irish, German, Schlager, 80s, Rock, Country and Duets.
 
 ![The four looks](docs/screenshots/looks.png)
 
 **`starter-songs.txt`** is the hand-picked list: one `Artist - Title` per line, under `# Crowd favourites`, `# Irish` and `# German`. It fills those three lists and gives the song maker its first batch. The Irish and German sections are examples: edit them for your venue.
 
-To force a look for a song, add it after the title: `Nena - 99 Luftballons | neon80s`. The song looks are `celtic`, `neon80s`, `disco`, `rock`, `ballad`, `pop` and `cover` (colours from the album cover).
+To force a look for a song, add it after the title: `Nena - 99 Luftballons | neon80s`. The song looks are `celtic`, `neon80s`, `disco`, `rock`, `ballad`, `pop`, `halloween` and `cover` (colours from the album cover).
 
 ## Settings
 
@@ -103,6 +116,8 @@ To force a look for a song, add it after the title: `Nena - 99 Luftballons | neo
 |---|---|
 | `pin` | Staff PIN for `/admin`. *File only.* |
 | `pub_name`, `look`, `accent`, `icon`, `shelves` | Your venue's name and look (see above). |
+| `logos` | The logos next to `settings.json`, each for every look or for one look: `[{"file": "logo-….jpg", "look": "halloween"}]`. Added and removed on the staff page. |
+| `nights` | Special nights: `[{"date": "2026-12-31", "look": "neon", "yearly": true}]`. Set on the staff page under *Venue look*. |
 | `wifi_name`, `wifi_password` | Guest Wi-Fi, shown as a QR code on the TV and table cards. Never sent over the internet link. *File only.* |
 | `songs_per_singer` | How many songs one person may have waiting (2). |
 | `upnext_seconds` | How long the "get to the mic" countdown runs (15). |
@@ -112,7 +127,7 @@ To force a look for a song, add it after the title: `Nena - 99 Luftballons | neo
 | `internet_link` | Open the internet link when cloudflared is installed (on). *File only.* |
 | `port` | The app's port (5000). *File only.* |
 | `public_url` | A fixed address for the QR code, if you run your own reverse proxy. Leave empty otherwise. *File only.* |
-| `display` | TV options: lyrics style, highlight, size, position, screen delay. Set on the staff page under *TV screen*. |
+| `display` | TV options: lyrics style, highlight, size, position, screen delay, and the song look (`"theme": "venue"` is tonight's theme everywhere). Set on the staff page under *TV screen*. |
 
 ## Networks
 
@@ -189,7 +204,9 @@ While the app runs, it makes songs by itself. For days it isn't running, schedul
 
 1. Switch on the TV and the sound. If the TV is a *second* screen to the right of the laptop's, set `TV_X=1920` in `start-karaoke.bat` (Windows).
 2. Start **Pub Karaoke**. The TV shows the welcome screen with the QR codes.
-3. Staff open `/admin` on their phone and enter the PIN. There they can skip singers who don't turn up, let someone go next, turn the help vocals up or down, or move a song's lyrics earlier or later.
+3. Staff open `/admin` on their phone and enter the PIN. There they can skip singers who don't turn up, start a song again after a false start, let someone go next, turn the help vocals up or down, move a song's lyrics earlier or later, or change tonight's theme.
+
+After an update, open pages (the TV, phones, the staff page) load the new version by themselves; the TV waits until no song is playing.
 4. Print table cards and a staff sheet from `http://localhost:5000/print`.
 5. At the end of the night, close the TV screen (Alt+F4) and the server window. A restart within 12 hours keeps the queue; the next night starts fresh.
 
@@ -239,7 +256,7 @@ The tests need no graphics card, songs or network.
 | `app.py` | The live app: queue, routes, PIN, internet link. |
 | `catalog.py` | Search and song lists. |
 | `make_songs.py` | The song maker. |
-| `static/` | The pages. `looks.css` holds the four looks; `themes.js` holds the TV's song backgrounds. |
+| `static/` | The pages. `looks.css` holds the looks; `themes.js` holds the TV's song backgrounds. A look with a backdrop of the same name (`halloween`) shows it for every song: a new holiday look is one palette, one backdrop and its name in `LOOKS` and `THEME_NAMES`. |
 | `test_*.py` | The tests. |
 
 Pull requests are welcome. Please run the tests first.

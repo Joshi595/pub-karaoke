@@ -3,6 +3,7 @@ const qr = (el, text) => { const q = qrcode(0, "M"); q.addData(text); q.make(); 
 const esc = s => s.replace(/([\\;,:"])/g, "\\$1");
 fetch("/api/state").then(r => r.json()).then(s => {
   applyVenueLook(s.look);
+  useVoice(s); speak();  // tonight's words, when staff want the theme everywhere
   document.querySelectorAll(".pub").forEach(n => n.textContent = s.pub_name);
   document.title = `${s.pub_name}: printables`;
   qr(document.getElementById("joinQr"), s.join_url);

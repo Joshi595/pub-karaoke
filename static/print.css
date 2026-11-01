@@ -8,11 +8,12 @@ body { margin: 0; color: var(--ink); font: 10.5pt/1.4 var(--body-font); backgrou
 .card { padding: 8mm; outline: .2mm dashed #b5bdb8; overflow: hidden; }
 .sheet { padding: 10mm 14mm; break-before: page; font-size: 9pt; line-height: 1.32; }
 @media print { body { background: none; } .page { margin: 0; box-shadow: none; } .noprint { display: none; } }
-h1 { font: 400 22pt/1.05 var(--display-font); color: var(--on-paper); margin: 0; }
+h1 { font: 400 22pt/1.05 var(--headline-font); color: var(--on-paper); margin: 0; }
+.card .logo { float: right; max-height: 13mm; width: auto; margin-left: 3mm; border-radius: 1.5mm; box-shadow: 0 0 0 .4mm var(--accent); }  /* beside the name, so the card keeps its height */
 .sub { font: var(--quote-style) 11pt var(--display-font); margin: 1mm 0 4mm; }
-.qrs { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+.qrs { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; clear: right; }
 .qrs figure { margin: 0; text-align: center; }
-.qrs svg { width: 100%; height: auto; display: block; }
+.qrs svg { width: 75%; height: auto; display: block; margin: 0 auto; }  /* 32 mm: easy to scan, and the card's rules still fit */
 .qrs figcaption { font-size: 8pt; margin-top: 1mm; word-break: break-all; }
 ol.steps { margin: 4mm 0 0; padding-left: 5mm; }
 ol.steps li { margin-bottom: 1.5mm; }

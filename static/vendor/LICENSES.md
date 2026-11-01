@@ -8,6 +8,7 @@ other people's work, included unchanged under their own licenses.
 | `p5.min.js` | [p5.js](https://github.com/processing/p5.js) 1.11.3, © the Processing Foundation and contributors | LGPL-2.1, text in [`LGPL-2.1.txt`](LGPL-2.1.txt); source at the link |
 | `qrcode.js` | [QR Code Generator](https://github.com/kazuhikoarase/qrcode-generator), © 2009 Kazuhiko Arase | MIT (notice in the file's header) |
 | `fonts/atkinsonhyperlegible-*.woff2` | Atkinson Hyperlegible, Copyright 2020 Braille Institute of America, Inc. | SIL OFL 1.1 |
+| `fonts/creepster-400.woff2` | Creepster, Copyright (c) 2011, Font Diner, Inc (diner@fontdiner.com), with Reserved Font Name "Creepster" | SIL OFL 1.1 |
 | `fonts/fredoka-600.woff2` | Fredoka, Copyright 2016 The Fredoka Project Authors (https://github.com/hafontia/Fredoka-One) | SIL OFL 1.1 |
 | `fonts/imfellenglish-*.woff2` | IM FELL English, © 2007 Igino Marini (www.iginomarini.com), with Reserved Font Names "IM FELL English Roman" and "IM FELL English Italic" | SIL OFL 1.1 |
 | `fonts/orbitron-700.woff2` | Orbitron, Copyright 2018 The Orbitron Project Authors (https://github.com/theleagueof/orbitron), with Reserved Font Name "Orbitron" | SIL OFL 1.1 |

@@ -16,10 +16,10 @@
 <div id="bg" aria-hidden="true"></div>
 
 <section class="scene" id="lobby">
-  <h1 class="shade" id="pub">Karaoke</h1>
+  <div class="brand shade"><img class="logo" alt=""><h1 id="pub">Karaoke</h1></div>
   <div class="join shade">
     <div>
-      <p class="big">Scan to sing<br>Scannen &amp; singen</p>
+      <p class="big" data-say="tvScan" data-join="br">Scan to sing<br>Scannen &amp; singen</p>
       <div class="qr" id="joinQr"></div>
       <p id="joinUrl"></p>
     </div>
@@ -30,16 +30,16 @@
     </div>
   </div>
   <div class="lineup shade">
-    <h2>Next up / Als Nächstes</h2>
+    <h2 data-say="tvNextUp">Next up / Als Nächstes</h2>
     <ol id="lineup"></ol>
     <p class="prep" id="prep" hidden></p>
-    <p class="free" id="free">The stage is free. Scan the code and pick a song!<br>Die Bühne ist frei. Code scannen und Song aussuchen!</p>
+    <p class="free" id="free" data-say="tvFree" data-join="br">The stage is free. Scan the code and pick a song!<br>Die Bühne ist frei. Code scannen und Song aussuchen!</p>
   </div>
 </section>
 
 <section class="scene shade" id="upnext" hidden>
   <p class="who" id="upWho"></p>
-  <p class="call">Get to the mic! / Ab ans Mikro!</p>
+  <p class="call" data-say="tvCall">Get to the mic! / Ab ans Mikro!</p>
   <p class="song" id="upSong"></p>
   <p class="count" id="upCount"></p>
   <div class="qrcorner"><div class="qr" id="upQr"></div></div>
@@ -50,6 +50,7 @@
   <div id="gap" class="shade" hidden>♪<div class="bar"><i id="gapBar"></i></div></div>
   <div id="lyrics"><div id="dots"></div><div id="lines"></div><span id="ball" hidden></span></div>
   <div class="bottom shade">
+    <img class="logo" alt="">
     <span class="singer" id="barSinger"></span>
     <div><span id="barSong"></span><div class="progress"><i id="barProgress"></i></div></div>
     <span class="next" id="barNext"></span>
@@ -67,7 +68,7 @@
 </section>
 
 <section class="scene shade" id="applause" hidden>
-  <p>Applause for / Applaus für</p>
+  <p data-say="tvApplause">Applause for / Applaus für</p>
   <p class="who" id="clapWho"></p>
 </section>
 

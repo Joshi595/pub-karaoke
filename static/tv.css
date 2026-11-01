@@ -4,7 +4,7 @@
   --unsung: #FFF8E7;       /* words still to sing */
   --sung: #F4C54A;         /* words already sung; themes override */
   --panel: color-mix(in srgb, var(--bg) 80%, transparent);
-  --title-font: var(--display-font);
+  --title-font: var(--headline-font);
   --lyric-font: "Atkinson", system-ui, sans-serif;
   --lyric-weight: 700;
   --lyric-transform: none;
@@ -22,7 +22,9 @@ body { font-family: var(--body-font); }
 
 /* lobby */
 #lobby { display: grid; grid-template-columns: auto 1fr; gap: 4vh 6vw; align-content: center; padding: 6vh 7vw; }
-#lobby h1 { grid-column: 1 / -1; margin: 0; font: 400 11vh/1 var(--title-font); }
+#lobby .brand { grid-column: 1 / -1; display: flex; align-items: center; gap: 3vw; }
+#lobby .logo { max-height: 22vh; max-width: 40vw; width: auto; border-radius: 1.2vh; }  /* the name stays beside it */
+#lobby h1 { margin: 0; font: 400 11vh/1 var(--title-font); }
 .join { display: grid; grid-template-columns: 34vh auto; gap: 2vh 3vw; align-items: end; }
 .join .qr { width: 34vh; }
 .join .wifi .qr { width: 20vh; }
@@ -91,6 +93,8 @@ body { font-family: var(--body-font); }
 #gap .bar i { display: block; height: 100%; background: var(--accent); width: 0; }
 .bottom { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: auto 1fr auto auto; gap: 2vw; align-items: center;
   padding: 1.6vh 2.4vw; background: linear-gradient(transparent, #000b 35%); font-size: 2.8vh; }
+[data-logo] .bottom { grid-template-columns: auto auto 1fr auto auto; }  /* the pub's sign at the start of the bar */
+.bottom .logo { max-height: 7vh; width: auto; border-radius: .6vh; }
 .bottom .singer { font-weight: 700; color: var(--accent); font-size: 3.4vh; }
 .bottom .progress { height: .8vh; background: #ffffff33; border-radius: 1vh; overflow: hidden; margin-top: .8vh; }
 .bottom .progress i { display: block; height: 100%; width: 0; background: var(--accent); }

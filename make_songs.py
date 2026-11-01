@@ -18,7 +18,7 @@ KARAFUN_LIST = "https://www.karafun.com/karaoke-song-list.html"  # the free CSV 
 
 # ---------------------------------------------------------------- helpers
 
-THEME_NAMES = {"celtic", "neon80s", "disco", "rock", "ballad", "pop", "cover"}
+THEME_NAMES = {"celtic", "neon80s", "disco", "rock", "ballad", "pop", "cover", "halloween"}
 SECTION_HINTS = {"irish": ("celtic", None), "german": ("disco", "de")}
 
 

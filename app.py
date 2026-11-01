@@ -12,6 +12,7 @@ import threading
 import time
 import unicodedata
 import uuid
+from datetime import date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -193,11 +194,11 @@ class Party:
 # ---------------------------------------------------------------- web app
 
 SHELVES = ("ready", "here", "top", "classics", "irish", "german", "schlager", "80s", "rock", "country", "duets")
-LOOKS = ("stage", "pub", "neon", "daylight")
+LOOKS = ("stage", "pub", "neon", "daylight", "halloween")
 DEFAULT_SETTINGS = {"pin": "1234", "songs_per_singer": 2, "upnext_seconds": 15, "wifi_name": "", "wifi_password": "",
                     "pub_name": "Karaoke Night", "port": 5000, "public_url": "", "max_wait_seconds": 90,
                     "hide_explicit": True, "languages": [], "auto_download": True, "library_max_gb": 20,
-                    "internet_link": True, "look": "stage", "accent": "", "icon": "🎤",
+                    "internet_link": True, "look": "stage", "accent": "", "icon": "🎤", "logos": [], "nights": [],
                     "shelves": ["ready", "here", "top", "classics", "80s", "rock", "country", "duets"]}
 TUNNEL_ADDRESS = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
 
@@ -225,7 +226,7 @@ def tunnel_online(url, wait=60):
         time.sleep(3)
     return False
 LIBRARY_FILES = {"instrumental.m4a", "vocals.m4a", "lyrics.json", "song.json", "cover.jpg"}
-THEME_NAMES = ("celtic", "neon80s", "disco", "rock", "ballad", "pop", "cover")
+THEME_NAMES = ("celtic", "neon80s", "disco", "rock", "ballad", "pop", "cover", "halloween")
 DEFAULT_DISPLAY = {"layout": "auto", "highlight": "auto", "size": "L", "position": "middle", "next_line": True,
                    "dots": True, "band": False, "theme": "auto", "screen_delay_ms": 0}
 
@@ -269,11 +270,59 @@ def shelves(v):
     return v if ok else None
 
 
+def nights(v):
+    """Special nights, each with its own look: [{"date": "2026-10-31", "look": "halloween", "yearly": true}]."""
+    def ok(n):
+        if not isinstance(n, dict) or set(n) != {"date", "look", "yearly"} or not isinstance(n["yearly"], bool):
+            return False
+        if not isinstance(n["date"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", n["date"]) or n["look"] not in LOOKS:
+            return False
+        try:
+            return bool(date.fromisoformat(n["date"]))
+        except ValueError:  # 2026-02-30
+            return False
+    return v if isinstance(v, list) and len(v) <= 50 and all(ok(n) for n in v) else None
+
+
+def tonight(now):
+    """The date of the night that's on: a karaoke night runs past midnight, so 1 am still belongs to the night before."""
+    return (now - timedelta(hours=6)).date()  # ponytail: fixed 6 am changeover, make it a setting if a venue opens mornings
+
+
+def night_look(special, day):
+    """The look of a special night on this day, or "". A yearly night comes back on its month and day."""
+    for n in special:
+        d = date.fromisoformat(n["date"])
+        if d == day or (n["yearly"] and (d.month, d.day) == (day.month, day.day)):
+            return n["look"]
+    return ""
+
+
+def logos(v):
+    """The venue's logos: [{"file": "logo-123.jpg", "look": "halloween"}]. Look "": for every look without its own."""
+    def ok(entry):
+        return (isinstance(entry, dict) and set(entry) == {"file", "look"} and isinstance(entry["file"], str)
+                and re.fullmatch(r"logo-\d+\.(jpg|png|webp)", entry["file"]) and (entry["look"] == "" or entry["look"] in LOOKS))
+    return v if isinstance(v, list) and len(v) <= 12 and all(ok(e) for e in v) else None
+
+
+def image_kind(data):
+    """jpg, png or webp, told by the file's first bytes; anything else is None. Never SVG: it can carry scripts."""
+    if data[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
 # What staff may change from the admin page, and what each value may be. Anything else (the PIN!) stays in Notepad.
 EDITABLE = {
     "display": {"layout": one_of("auto", "classic", "scroll", "bigline", "ball"), "highlight": one_of("auto", "wipe", "glow", "pop"),
                 "size": one_of("S", "M", "L", "XL"), "position": one_of("middle", "lower"), "next_line": flag, "dots": flag,
-                "band": flag, "theme": one_of("auto", *THEME_NAMES), "screen_delay_ms": number(-1000, 1000, int)},
+                "band": flag, "theme": one_of("auto", "venue", *THEME_NAMES),  # venue: tonight's theme everywhere
+                "screen_delay_ms": number(-1000, 1000, int)},
     "songs_per_singer": number(1, 5, int),
     "upnext_seconds": number(5, 60, int),
     "max_wait_seconds": number(0, 600, int),
@@ -286,6 +335,7 @@ EDITABLE = {
     "accent": colour,
     "icon": words(8, "<>&\"'"),  # it also goes into the pages' SVG favicon
     "shelves": shelves,
+    "nights": nights,
 }
 
 
@@ -397,6 +447,15 @@ def ensure_settings(root):
 def create_app(root):
     root = Path(root)
     settings = {**DEFAULT_SETTINGS, **json.loads(ensure_settings(root).read_text(encoding="utf-8-sig"))}
+    if nights(settings["nights"]) is None:  # edited by hand and broken: every page asks for tonight's look
+        print("warning: 'nights' in settings.json is not valid; no special nights until it is fixed", flush=True)
+        settings["nights"] = []
+    if settings.get("logo"):  # one logo, as kept before logos per look
+        settings["logos"] = [{"file": settings["logo"], "look": ""}]
+    settings.pop("logo", None)
+    if logos(settings["logos"]) is None:
+        print("warning: 'logos' in settings.json is not valid; no logo until it is fixed", flush=True)
+        settings["logos"] = []
     library = root / "library"
     library.mkdir(exist_ok=True)
     songs = load_songs(library)
@@ -406,6 +465,14 @@ def create_app(root):
     static = root / "static"
     app = Flask(__name__, static_folder=str(static), static_url_path="/static")
     app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # every request is a few hundred bytes of JSON
+    # the pages' version: after an update, open pages see it change and load the new files (static/look.js), without
+    # a restart (which would also change the internet address). Looked at every 10 s at most: phones ask every 2 s.
+    stamp = ["", 0.0]
+
+    def version():
+        if time.time() - stamp[1] > 10:
+            stamp[:] = [str(max((f.stat().st_mtime_ns for f in static.rglob("*") if f.is_file()), default=0)), time.time()]
+        return stamp[0]
 
     @app.after_request
     def security_headers(r):
@@ -489,7 +556,7 @@ def create_app(root):
 
     def playing(device=None):
         np = party.now_playing
-        return {**info(np), **view(np, device), "yt": np.get("yt", [])} if np else None
+        return {**info(np), **view(np, device), "yt": np.get("yt", []), "restarts": np.get("restarts", 0)} if np else None
 
     def mark(v):
         """Search results: say which songs can only play as a YouTube video, and which one is being made now."""
@@ -745,6 +812,20 @@ def create_app(root):
                     catalog.shelf(request.args.get("shelf", "top"), page=page, popular=popular(), **filters()))
             return jsonify(songs=[mark(v) for v in rows])
 
+    def venue_look():
+        """The everyday look, and tonight's special-night look when there is one (look.js shows that one instead).
+        With the logos of the look that shows: its own, else the ones for every look. The TV changes between several."""
+        night = night_look(settings["nights"], tonight(datetime.now()))
+        mine = lambda look: [f"/logo/{e['file']}" for e in settings["logos"] if e["look"] == look]
+        shown = mine(night or settings["look"]) or mine("")
+        return {**{k: settings[k] for k in ("look", "accent", "icon")}, "logo": shown[0] if shown else "", "logos": shown, "night": night}
+
+    @app.get("/logo/<name>")
+    def logo(name):
+        if name not in {e["file"] for e in settings["logos"]}:
+            abort(404)
+        return send_from_directory(root, name)
+
     @app.get("/api/state")
     def api_state():
         device = request.args.get("device")
@@ -753,7 +834,7 @@ def create_app(root):
                            paused=party.paused, volume=party.volume, help_vocals=party.help_vocals,
                            join_url=join_url(),  # the Wi-Fi password is for the TV and table cards, not the internet
                            wifi={"name": settings["wifi_name"], "password": "" if via_internet() else settings["wifi_password"]},
-                           pub_name=settings["pub_name"], look={k: settings[k] for k in ("look", "accent", "icon")},
+                           pub_name=settings["pub_name"], look=venue_look(), nights=settings["nights"], logos=settings["logos"], version=version(),
                            shelves=settings["shelves"], upnext_seconds=settings["upnext_seconds"],
                            songs_per_singer=settings["songs_per_singer"], nudge=party.nudge, synctest=party.synctest,
                            display={**DEFAULT_DISPLAY, **settings.get("display", {})}, maker={**making, "pct": progress()} if making else {},
@@ -865,6 +946,19 @@ def create_app(root):
     @admin
     def admin_skip():
         return jsonify(ok=party.done(body().get("id")))
+
+    @app.post("/api/admin/restart")
+    @admin
+    def admin_restart():
+        """The playing song again from the top, after a false start. The TV sees the count go up.
+        The id is the song staff saw: a late tap must not restart the next singer."""
+        np = party.now_playing
+        if not np or np["id"] != body().get("id"):
+            return jsonify(ok=False)
+        np["restarts"] = np.get("restarts", 0) + 1
+        party.paused = False  # starting again means playing
+        party.save()
+        return jsonify(ok=True)
 
     @app.post("/api/admin/pause")
     @admin
@@ -983,14 +1077,71 @@ def create_app(root):
         party.synctest = body().get("on") is True
         return jsonify(ok=True)
 
+    def save_settings():
+        if not write_json(root / "settings.json", settings, indent=1):
+            print("warning: could not save settings.json; the change holds until the app restarts")
+
     @app.post("/api/admin/settings")
     @admin
     def admin_settings():
         settings.update(merge_settings(settings, body()))
         party.songs_per_singer, party.max_wait = settings["songs_per_singer"], settings["max_wait_seconds"]
         wake.set()  # auto-download may have been switched on
-        if not write_json(root / "settings.json", settings, indent=1):
-            print("warning: could not save settings.json; the change holds until the app restarts")
+        save_settings()
+        return jsonify(ok=True)
+
+    @app.post("/api/admin/tonight")
+    @admin
+    def admin_tonight():
+        """Tonight's theme, picked on the staff page: a one-off special night for tonight, ahead of any yearly one.
+        Picking what tonight would show anyway (the everyday look, or tonight's yearly night) just drops the one-off."""
+        look, day = body().get("look"), tonight(datetime.now())
+        if look not in LOOKS:
+            raise QueueError("bad_setting")
+        rest = [n for n in settings["nights"] if n["date"] != day.isoformat() or n["yearly"]]
+        if look != (night_look(rest, day) or settings["look"]):
+            if len(rest) >= 50:
+                raise QueueError("bad_setting")
+            rest.insert(0, {"date": day.isoformat(), "look": look, "yearly": False})
+        settings["nights"] = rest
+        save_settings()
+        return jsonify(ok=True)
+
+    def set_logos(new):
+        settings["logos"] = new
+        save_settings()
+        keep = {e["file"] for e in new}
+        for old in root.glob("logo-*"):  # removed ones, and any left behind
+            if old.name not in keep:
+                try:
+                    old.unlink()
+                except OSError:  # on Windows, a file still being sent to a phone can't go yet: the next change takes it
+                    pass
+
+    @app.post("/api/admin/logo")
+    @admin
+    def admin_logo():
+        """A logo for every look (?look=), or for one look only (?look=halloween). A new file name each time, so no
+        phone keeps showing an old one."""
+        look = request.args.get("look", "")
+        if look and look not in LOOKS:
+            raise QueueError("bad_setting")
+        if len(settings["logos"]) >= 12:
+            raise QueueError("too_many_logos")
+        request.max_content_length = 1_000_000  # the rest of the app takes 64 KB
+        data = request.get_data()
+        kind = image_kind(data)
+        if not kind:
+            raise QueueError("bad_image")
+        name = f"logo-{uuid.uuid4().int}.{kind}"
+        (root / name).write_bytes(data)
+        set_logos([*settings["logos"], {"file": name, "look": look}])
+        return jsonify(ok=True)
+
+    @app.delete("/api/admin/logo")
+    @admin
+    def admin_logo_remove():
+        set_logos([e for e in settings["logos"] if e["file"] != body().get("file")])
         return jsonify(ok=True)
 
     app.config["settings"] = settings

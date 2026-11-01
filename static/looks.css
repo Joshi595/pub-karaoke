@@ -8,6 +8,7 @@
 @font-face { font-family: "Oswald"; font-weight: 700; src: url(/static/vendor/fonts/oswald-700.woff2) format("woff2"); font-display: swap; }
 @font-face { font-family: "Orbitron"; font-weight: 700; src: url(/static/vendor/fonts/orbitron-700.woff2) format("woff2"); font-display: swap; }
 @font-face { font-family: "Fredoka"; font-weight: 600; src: url(/static/vendor/fonts/fredoka-600.woff2) format("woff2"); font-display: swap; }
+@font-face { font-family: "Creepster"; src: url(/static/vendor/fonts/creepster-400.woff2) format("woff2"); font-display: swap; }
 
 /* stage, the default: a velvet curtain under an amber follow-spot, billed in condensed poster type */
 :root, [data-look="stage"] {
@@ -45,4 +46,32 @@
   --paper: #FFFFFF; --on-paper: #16203A; --danger: #A32020;
   --display-font: "Fredoka", system-ui, sans-serif;
   color-scheme: light;
+}
+/* the venue's own logo, uploaded on the staff page (look.js sets data-logo). Shown like a lit sign: a rim in the
+   look's accent and a soft glow of it, so any picture, whatever its own background, belongs to the page. */
+img.logo { display: none; }
+[data-logo] img.logo[src] { display: block; max-width: 100%; height: auto; border-radius: .5em;
+  box-shadow: 0 0 0 .14em color-mix(in srgb, var(--accent) 75%, transparent), 0 .6em 1.6em rgb(0 0 0 / .45),
+              0 0 2.4em color-mix(in srgb, var(--accent) 30%, transparent); }
+
+/* tonight's theme in a strip (look.js themeBanner): the TV's backdrop, with the logo hanging in it like a sign */
+.banner { position: relative; }
+.banner.live { aspect-ratio: 16 / 9; overflow: hidden; border-radius: 14px; display: grid; place-items: center; background: var(--surface); }
+.banner.live canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+.banner .logo { position: relative; z-index: 1; }
+.banner.live .logo { position: absolute; top: 50%; left: 50%; translate: -50% -50%; max-height: 58%; max-width: 80%; width: auto; }
+
+/* the headline face: the venue's name and the TV's big titles. The look's own display face, unless it has a louder one */
+:root, [data-look] { --headline-font: var(--display-font); }
+
+/* halloween: a full moon over a plum night, pumpkin light, dripping horror-film titles. Pick it for the night, or
+   let a special night switch to it by itself; on the TV it brings its own backdrop (themes.js) for every song.
+   Creepster only for headlines: song titles in it would be hard to read in a dim room. */
+[data-look="halloween"] {
+  --bg: #120A18; --surface: #21122B; --line: #3A2148;
+  --fg: #F4EBDD; --muted: #B8A2C6;
+  --accent: #FF7A1A; --on-accent: #120A18;
+  --paper: #F4EBDD; --on-paper: #120A18; --danger: #B3261E;
+  --display-font: "Oswald", "Arial Narrow", sans-serif;
+  --headline-font: "Creepster", "Oswald", sans-serif;
 }

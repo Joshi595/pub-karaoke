@@ -2,7 +2,7 @@ const T = {
   en: { title: "Karaoke staff", pinText: "Enter the staff PIN.", pin: "PIN", unlock: "Unlock", wrongPin: "Wrong PIN.", locked: "Too many wrong PINs. Wait a minute.",
         pinTooEasy: "From the internet, the staff page needs its own PIN. On the laptop, change \"pin\" in settings.json from 1234 and restart the app.",
         nobody: "Nobody is singing", idle: "The TV will start the next song by itself.",
-        skip: "Skip", skipSure: "Tap again to skip", pause: "Pause", resume: "Resume",
+        skip: "Skip", skipSure: "Tap again to skip", restart: "Start again", restartSure: "Tap again to start over", pause: "Pause", resume: "Resume",
         help: "Help vocals", helpNote: "The original singer, quietly underneath. Saved for this song.", volume: "Volume",
         upNext: "Up next", empty: "Nobody is waiting.", playNext: "Play next", remove: "Remove", removeSure: "Tap again",
         pinnedNote: "Plays next", offline: "Can't reach the karaoke laptop.",
@@ -11,7 +11,18 @@ const T = {
         nudgeNote: "If the words light up before or after the singing. Saved for this song.",
         venue: "Venue look", venueName: "Name on the screens", lookPick: "Look", accent: "Accent colour", accentReset: "Use the look's own",
         icon: "Icon", iconNote: "One emoji, shown in browser tabs.", shelvesPick: "Song lists on guests' phones",
-        looks: { stage: ["Stage", "Velvet and a spotlight"], pub: ["Pub", "Bottle green and brass"], neon: ["Neon", "A late-night sign"], daylight: ["Daylight", "Bright, for daytime"] },
+        logo: "Logos", logoFor: "Add a logo for", everyLook: "Every look", logoFile: "Logo picture",
+        logoNote: "JPG, PNG or WebP, up to 1 MB. Give a look logos of its own (Halloween ones, say): on those nights they show instead, and the TV changes between them with each song.",
+        bad_image: "That file isn't a JPG, PNG or WebP picture.", logoTooBig: "That picture is over 1 MB. Save it smaller and try again.",
+        too_many_logos: "That's 12 logos already. Remove one first.",
+        nights: "Special nights", nightsNote: "On these dates every screen switches to that look by itself, from 6 am until 6 am the next morning.",
+        addNight: "Add a night", yearly: "Every year", nightDate: "Date of the night",
+        themeTitle: "Tonight's theme", everyday: name => `${name} (everyday)`,
+        tonightNote: (same, everyday) => same ? "Your everyday look. Change it for good, or plan nights like Halloween, under Venue look."
+                                              : `For tonight only: from 6 am it's ${everyday} again.`,
+        everywhere: "Use it everywhere: for every song on the TV, on the guests' phones, and in what the screens say",
+        looks: { stage: ["Stage", "Velvet and a spotlight"], pub: ["Pub", "Bottle green and brass"], neon: ["Neon", "A late-night sign"], daylight: ["Daylight", "Bright, for daytime"],
+                 halloween: ["Halloween", "Pumpkins, bats and a full moon"] },
         shelf: { ready: "Ready now", here: "Popular here", top: "Top hits", classics: "Crowd favourites", irish: "Irish", german: "German",
                  schlager: "Schlager", "80s": "80s", rock: "Rock", country: "Country", duets: "Duets" },
         screen: "TV screen", layout: "Lyrics style", highlight: "Highlight", size: "Text size", position: "Position",
@@ -36,11 +47,11 @@ const T = {
                 library_max_gb: { 5: "5 GB", 10: "10 GB", 20: "20 GB", 50: "50 GB", 100: "100 GB", 200: "200 GB" },
                 highlight: { auto: "From the song's look", wipe: "Colour wipe", glow: "Glow", pop: "Pop" },
                 size: { S: "Small", M: "Medium", L: "Large", XL: "Extra large" }, position: { middle: "Middle", lower: "Lower third" },
-                theme: { auto: "Matches each song", celtic: "Irish", neon80s: "80s neon", disco: "Disco", rock: "Rock", ballad: "Ballad", pop: "Pop", cover: "Album colours" } } },
+                theme: { auto: "Matches each song", venue: "Tonight's theme", celtic: "Irish", neon80s: "80s neon", disco: "Disco", rock: "Rock", ballad: "Ballad", pop: "Pop", cover: "Album colours", halloween: "Halloween" } } },
   de: { title: "Karaoke-Personal", pinText: "Gib die Personal-PIN ein.", pin: "PIN", unlock: "Entsperren", wrongPin: "Falsche PIN.", locked: "Zu viele falsche PINs. Bitte eine Minute warten.",
         pinTooEasy: "Über das Internet braucht die Personal-Seite eine eigene PIN. Auf dem Laptop in settings.json \"pin\" von 1234 ändern und die App neu starten.",
         nobody: "Gerade singt niemand", idle: "Der Fernseher startet den nächsten Song von selbst.",
-        skip: "Überspringen", skipSure: "Nochmal tippen zum Überspringen", pause: "Pause", resume: "Weiter",
+        skip: "Überspringen", skipSure: "Nochmal tippen zum Überspringen", restart: "Von vorn", restartSure: "Nochmal tippen: von vorn", pause: "Pause", resume: "Weiter",
         help: "Hilfsgesang", helpNote: "Der Originalgesang, leise im Hintergrund. Wird für diesen Song gespeichert.", volume: "Lautstärke",
         upNext: "Als Nächstes", empty: "Niemand wartet.", playNext: "Als Nächstes", remove: "Entfernen", removeSure: "Nochmal tippen",
         pinnedNote: "Kommt als Nächstes", offline: "Keine Verbindung zum Karaoke-Laptop.",
@@ -49,7 +60,18 @@ const T = {
         nudgeNote: "Wenn die Wörter vor oder nach dem Gesang aufleuchten. Wird für diesen Song gespeichert.",
         venue: "Aussehen", venueName: "Name auf den Bildschirmen", lookPick: "Stil", accent: "Akzentfarbe", accentReset: "Farbe des Stils",
         icon: "Symbol", iconNote: "Ein Emoji, erscheint im Browser-Tab.", shelvesPick: "Songlisten auf den Handys der Gäste",
-        looks: { stage: ["Bühne", "Samt und Scheinwerfer"], pub: ["Pub", "Flaschengrün und Messing"], neon: ["Neon", "Leuchtreklame bei Nacht"], daylight: ["Tageslicht", "Hell, für tagsüber"] },
+        logo: "Logos", logoFor: "Logo hinzufügen für", everyLook: "Alle Stile", logoFile: "Logo-Bild",
+        logoNote: "JPG, PNG oder WebP, bis 1 MB. Ein Stil kann eigene Logos haben (z. B. für Halloween): an solchen Abenden erscheinen sie stattdessen, und der Fernseher wechselt bei jedem Song.",
+        bad_image: "Diese Datei ist kein JPG-, PNG- oder WebP-Bild.", logoTooBig: "Das Bild ist größer als 1 MB. Bitte kleiner speichern und nochmal versuchen.",
+        too_many_logos: "Schon 12 Logos. Bitte erst eins entfernen.",
+        nights: "Besondere Abende", nightsNote: "An diesen Tagen wechseln alle Bildschirme von selbst zu diesem Stil, von 6 Uhr bis 6 Uhr am nächsten Morgen.",
+        addNight: "Abend hinzufügen", yearly: "Jedes Jahr", nightDate: "Datum des Abends",
+        themeTitle: "Thema heute Abend", everyday: name => `${name} (sonst)`,
+        tonightNote: (same, everyday) => same ? "Euer gewohnter Stil. Dauerhaft ändern oder Abende wie Halloween planen: unter Aussehen."
+                                              : `Nur für heute Abend: ab 6 Uhr wieder ${everyday}.`,
+        everywhere: "Überall verwenden: für jeden Song am Fernseher, auf den Handys der Gäste und in den Texten der Bildschirme",
+        looks: { stage: ["Bühne", "Samt und Scheinwerfer"], pub: ["Pub", "Flaschengrün und Messing"], neon: ["Neon", "Leuchtreklame bei Nacht"], daylight: ["Tageslicht", "Hell, für tagsüber"],
+                 halloween: ["Halloween", "Kürbisse, Fledermäuse und Vollmond"] },
         shelf: { ready: "Sofort singbar", here: "Beliebt hier", top: "Top-Hits", classics: "Publikumslieblinge", irish: "Irisch", german: "Deutsch",
                  schlager: "Schlager", "80s": "80er", rock: "Rock", country: "Country", duets: "Duette" },
         screen: "Fernseher", layout: "Textdarstellung", highlight: "Hervorhebung", size: "Schriftgröße", position: "Position",
@@ -74,19 +96,21 @@ const T = {
                 library_max_gb: { 5: "5 GB", 10: "10 GB", 20: "20 GB", 50: "50 GB", 100: "100 GB", 200: "200 GB" },
                 highlight: { auto: "Passend zum Song", wipe: "Farbverlauf", glow: "Leuchten", pop: "Hüpfen" },
                 size: { S: "Klein", M: "Mittel", L: "Groß", XL: "Sehr groß" }, position: { middle: "Mitte", lower: "Unteres Drittel" },
-                theme: { auto: "Passend zu jedem Song", celtic: "Irisch", neon80s: "80er-Neon", disco: "Disco", rock: "Rock", ballad: "Ballade", pop: "Pop", cover: "Albumfarben" } } },
+                theme: { auto: "Passend zu jedem Song", venue: "Thema des Abends", celtic: "Irisch", neon80s: "80er-Neon", disco: "Disco", rock: "Rock", ballad: "Ballade", pop: "Pop", cover: "Albumfarben", halloween: "Halloween" } } },
 };
 const $ = id => document.getElementById(id);
 const store = (k, v) => { try { return v === undefined ? sessionStorage.getItem(k) : sessionStorage.setItem(k, v); } catch { return null; } };
 const local = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
 let lang = local("lang") || ((navigator.language || "").startsWith("de") ? "de" : "en");
 let pin = store("pin") || "", state = null, dragging = { help: false, vol: false, delay: false };
-const t = () => T[lang];
+const t = () => voiced(T[lang], lang);  // the title in tonight's voice, when the theme is everywhere (look.js)
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 function toast(msg) { const b = $("toast"); b.textContent = msg; b.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => b.classList.remove("show"), 3000); }
-async function admin(path, body) {
-  const r = await fetch(`/api/admin/${path}`, { method: "POST", headers: { "Content-Type": "application/json", "X-Pin": pin }, body: JSON.stringify(body || {}) });
+async function admin(path, body, method = "POST") {
+  const file = body instanceof Blob;  // the logo goes as it is; everything else as JSON
+  const r = await fetch(`/api/admin/${path}`, { method, headers: { "Content-Type": file ? body.type : "application/json", "X-Pin": pin },
+                                                 body: file ? body : JSON.stringify(body || {}) });
   if (r.status === 403) { lockUp(); throw "pin"; }
   if (!r.ok) throw (await r.json().catch(() => ({}))).error || "error";
   poll();
@@ -108,6 +132,10 @@ function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-t]").forEach(n => n.textContent = t()[n.dataset.t]);
   document.querySelectorAll("[data-tp]").forEach(n => { n.placeholder = t()[n.dataset.tp]; n.setAttribute("aria-label", t()[n.dataset.tp]); });
+  document.querySelectorAll("[data-tl]").forEach(n => n.setAttribute("aria-label", t()[n.dataset.tl]));
+  const forLook = $("logoLook").value;
+  $("logoLook").replaceChildren(new Option(t().everyLook, ""), ...Object.entries(t().looks).map(([v, [name]]) => new Option(name, v)));
+  $("logoLook").value = forLook;
   document.querySelectorAll(".lang button").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === lang));
   document.querySelectorAll("select[data-key]").forEach(s => {
     const labels = t().opts[s.dataset.key] || Object.fromEntries([1, 2, 3, 4, 5].map(n => [n, String(n)]));
@@ -143,9 +171,11 @@ function render() {
   const np = state.now_playing;
   $("who").textContent = np ? np.name : t().nobody;
   $("what").textContent = np ? `${np.title}, ${np.artist}` : t().idle;
-  $("skip").disabled = !np;
-  if ($("skip").dataset.armed && (!np || np.id !== skipId)) { delete $("skip").dataset.armed; $("skip").classList.remove("armed"); }
-  if (!$("skip").dataset.armed) $("skip").textContent = t().skip;
+  for (const [b, id, text] of [[$("skip"), skipId, t().skip], [$("restart"), restartId, t().restart]]) {
+    b.disabled = !np;
+    if (b.dataset.armed && (!np || np.id !== id)) { delete b.dataset.armed; b.classList.remove("armed"); }
+    if (!b.dataset.armed) b.textContent = text;
+  }
   $("pause").textContent = state.paused ? t().resume : t().pause;
   $("help").disabled = !np;
   if (!dragging.help) $("help").value = Math.round((state.help_vocals ?? 0.25) * 100);
@@ -163,16 +193,30 @@ function render() {
   });
   document.querySelectorAll("#langs input").forEach(i => { if (i !== document.activeElement) i.checked = (state.rules?.languages || []).includes(i.value); });
   applyVenueLook(state.look);
+  const before = voice;
+  useVoice(state);
+  if (voice !== before) return applyLang();  // tonight's words changed (applyLang comes back here)
   const idle = n => n !== document.activeElement;  // don't fight the staff member mid-change
   if (idle($("venueName"))) $("venueName").value = state.pub_name;
   if (idle($("icon"))) $("icon").value = state.look.icon;
   if (idle($("accent"))) $("accent").value = (state.look.accent || getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()).toLowerCase();
-  document.querySelectorAll("#looks input").forEach(i => i.checked = i.value === state.look.look);
+  document.querySelectorAll("#looks input").forEach(i => i.checked = i.value === state.look.look);  // the everyday look
+  const everyday = state.look.look, shown = state.look.night || everyday, sel = $("tonightLook");
+  if (sel.dataset.key !== lang + everyday) {  // the everyday look is marked as such
+    sel.dataset.key = lang + everyday;
+    sel.replaceChildren(...Object.entries(t().looks).map(([v, [name]]) => new Option(v === everyday ? t().everyday(name) : name, v)));
+  }
+  if (idle(sel)) sel.value = shown;
+  $("tonightNote").textContent = t().tonightNote(shown === everyday, (t().looks[everyday] || [everyday])[0]);
+  if (idle($("everywhere"))) $("everywhere").checked = d.theme === "venue";
+  themeBanner($("themeBanner"), shown);
+  renderNights();
+  renderLogos();
   document.querySelectorAll("#shelfBoxes input").forEach(i => { if (idle(i)) i.checked = state.shelves.includes(i.value); });
   if (!dragging.delay) $("delay").value = d.screen_delay_ms;
   $("delayOut").textContent = `${$("delay").value} ms`;
   $("syncTest").textContent = state.synctest ? t().syncStop : t().syncStart;
-  const q = new URLSearchParams({ demo: d.theme === "auto" ? "cover" : d.theme, size: d.size });
+  const q = new URLSearchParams({ demo: d.theme === "auto" ? "cover" : d.theme === "venue" ? (LOOK_THEMES[shown] || ["cover"])[0] : d.theme, size: d.size });
   if (d.layout !== "auto") q.set("layout", d.layout);
   if (d.highlight !== "auto") q.set("highlight", d.highlight);
   $("preview").href = `/tv?${q}`;
@@ -194,8 +238,53 @@ function render() {
   }) : [el("li", "empty", t().empty)]));
 }
 
+// Logos: a row each, with the look it is for.
+function renderLogos() {
+  const box = $("logos"), key = JSON.stringify([state.logos, lang]);
+  if (box.dataset.key === key || box.querySelector("[data-armed]")) return;  // don't redraw under a pending second tap
+  box.dataset.key = key;
+  box.replaceChildren(...state.logos.map(e => {
+    const li = el("li"), img = el("img", "thumb"), name = e.look ? (t().looks[e.look] || [e.look])[0] : t().everyLook;
+    const rm = el("button", "btn", t().remove);
+    img.src = `/logo/${encodeURIComponent(e.file)}`; img.alt = "";
+    rm.type = "button"; rm.setAttribute("aria-label", `${t().remove}: ${name}`);
+    rm.onclick = () => confirmTap(rm, t().removeSure, () => admin("logo", { file: e.file }, "DELETE").catch(failed));
+    li.append(img, el("span", null, name), rm);
+    return li;
+  }));
+}
+
+// Special nights: a row each; every change saves the whole list, like the song lists.
+const saveNights = list => saveSetting("nights", list, true);
+const today = () => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()].map(n => String(n).padStart(2, "0")).join("-"); };
+function renderNights() {
+  const a = document.activeElement, box = $("nights");
+  if (box.contains(a) && a.tagName !== "BUTTON") return;  // don't fight the staff member mid-change
+  const key = JSON.stringify([state.nights, lang]);
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  box.replaceChildren(...state.nights.map((n, i) => {
+    const li = el("li"), day = el("input", "text"), look = el("select"), every = el("label", "check"), yearly = el("input"), rm = el("button", "btn", t().remove);
+    day.type = "date"; day.required = true; day.value = n.date; day.setAttribute("aria-label", t().nightDate);
+    look.append(...Object.entries(t().looks).map(([v, [name]]) => new Option(name, v))); look.value = n.look; look.setAttribute("aria-label", t().lookPick);
+    yearly.type = "checkbox"; yearly.checked = n.yearly;
+    every.append(yearly, el("span", null, t().yearly));
+    rm.type = "button"; rm.setAttribute("aria-label", `${t().remove}: ${n.date}`);
+    const change = edit => saveNights(state.nights.map((m, j) => (j === i ? { ...m, ...edit } : m)));
+    day.onchange = () => day.value && change({ date: day.value });
+    look.onchange = () => change({ look: look.value });
+    yearly.onchange = () => change({ yearly: yearly.checked });
+    rm.onclick = () => saveNights(state.nights.filter((_, j) => j !== i));
+    li.append(day, look, every, rm);
+    return li;
+  }));
+}
+
 async function poll() {
-  try { state = await (await fetch("/api/state")).json(); render(); }
+  try {
+    state = await (await fetch("/api/state")).json(); render();
+    reloadIfUpdated(state.version, !document.activeElement?.matches("input, select") && !document.querySelector("[data-armed]"));
+  }
   catch { toast(t().offline); }
   if ($("songCare").open) loadCare();
 }
@@ -245,10 +334,14 @@ $("pinForm").addEventListener("submit", async ev => {
 });
 function unlock() { $("lock").hidden = true; $("panel").hidden = false; poll(); }
 // the song is chosen at the first tap: if it changes before the second tap, that tap must not skip the new singer
-let skipId = null;
+let skipId = null, restartId = null;
 $("skip").onclick = () => {
   if (!$("skip").dataset.armed) skipId = state.now_playing && state.now_playing.id;
   confirmTap($("skip"), t().skipSure, () => admin("skip", { id: skipId }));
+};
+$("restart").onclick = () => {
+  if (!$("restart").dataset.armed) restartId = state.now_playing && state.now_playing.id;
+  confirmTap($("restart"), t().restartSure, () => admin("restart", { id: restartId }));
 };
 $("pause").onclick = () => admin("pause", { paused: !state.paused });
 $("help").oninput = e => { dragging.help = true; $("helpOut").textContent = `${e.target.value}%`; sendHelp(+e.target.value); };
@@ -264,6 +357,16 @@ $("venueName").onchange = e => e.target.value.trim() && saveSetting("pub_name", 
 $("icon").onchange = e => e.target.value.trim() && saveSetting("icon", e.target.value.trim(), true);
 $("accent").onchange = e => saveSetting("accent", e.target.value, true);
 $("accentReset").onclick = () => saveSetting("accent", "", true);
+$("tonightLook").onchange = e => admin("tonight", { look: e.target.value }).catch(code => code !== "pin" && toast(t().bad_setting));
+$("everywhere").onchange = e => saveSetting("theme", e.target.checked ? "venue" : "auto");
+$("addNight").onclick = () => saveNights([...state.nights, { date: today(), look: "halloween", yearly: true }]);
+const failed = code => code !== "pin" && toast(t()[code] || t().bad_setting);
+$("logoFile").onchange = e => {
+  const f = e.target.files[0];
+  e.target.value = "";  // picking the same file again must still count
+  if (f && f.size > 1e6) return toast(t().logoTooBig);
+  if (f) admin(`logo?look=${encodeURIComponent($("logoLook").value)}`, f).catch(failed);
+};
 $("earlier").onclick = () => admin("nudge", { delta: 0.1 });
 $("later").onclick = () => admin("nudge", { delta: -0.1 });
 $("syncTest").onclick = () => admin("synctest", { on: !state.synctest });

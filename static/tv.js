@@ -59,6 +59,17 @@ const beat = () => level;
 // ---------------------------------------------------------------- themes and colours
 
 let theme = null, themeName = null;
+const lookShown = () => state?.look && (state.look.night || state.look.look);  // a special night's look beats the everyday one
+// The scenes the whole night shares, if any: staff want tonight's theme everywhere ("venue"), or the look is a
+// holiday look with a backdrop of its own name (Halloween). Each song gets another one of them (look.js LOOK_THEMES).
+function nightScenes() {
+  const shown = lookShown();
+  return state?.display?.theme === "venue" || Object.hasOwn(THEMES, shown) ? LOOK_THEMES[shown] : null;
+}
+const another = (list, now) => { const rest = list.filter(n => n !== now); return rest.length ? rest[Math.floor(Math.random() * rest.length)] : list[0]; };
+// The logo on the TV: when tonight's look has several, another one with each scene.
+let logoPick = null;
+const logoNow = () => (state.look.logos || []).includes(logoPick) ? logoPick : state.look.logo;
 function palette(url) {
   return new Promise(resolve => {
     const img = new Image();
@@ -85,6 +96,7 @@ function mainColours(img) {
 }
 
 async function setTheme(name, coverUrl, seed) {
+  if (state?.look?.logos?.length) logoPick = another(state.look.logos, logoPick);
   const pal = coverUrl ? await palette(coverUrl) : DEFAULT_PALETTE;
   const t = Object.hasOwn(THEMES, name) ? THEMES[name] : THEMES.cover;
   if (theme) theme.stop();
@@ -258,7 +270,9 @@ function show(name) { document.querySelectorAll(".scene").forEach(s => s.hidden 
 
 function renderLobby() {
   $("pub").textContent = state.pub_name;
-  applyVenueLook(state.look);
+  applyVenueLook({ ...state.look, logo: logoNow() });
+  useVoice(state); speak();  // tonight's words, when staff want the theme everywhere
+  if (`${lookShown()} ${state.display.theme}` !== lobbyLook) cycleLobbyTheme();  // staff changed it, or a special night began
   document.title = state.pub_name;
   qr($("joinQr"), state.join_url);
   $("joinUrl").textContent = state.join_url.replace(/^https?:\/\//, "").replace(/\/$/, "");
@@ -287,7 +301,7 @@ function renderBar() {
   $("barSinger").textContent = current.name;
   $("barSong").textContent = `${current.artist} – ${current.title}`;
   const nxt = state.queue[0];
-  $("barNext").textContent = nxt ? `Next / Als Nächstes: ${nxt.name}` : "";
+  $("barNext").textContent = nxt ? `${voice?.en.tvBar || "Next"} / ${voice?.de.tvBar || "Als Nächstes"}: ${nxt.name}` : "";
   qr($("barQr"), state.join_url);
   qr($("upQr"), state.join_url);
 }
@@ -306,10 +320,13 @@ async function poll() {
     if (state.paused !== videoPaused) { videoPaused = state.paused; videoPaused ? player.pauseVideo() : player.playVideo(); }
   }
   renderLobby(); renderBar();
+  reloadIfUpdated(state.version, scene === "lobby" && !busy && !current);  // updated: the new files, between songs
   if (scene === "singing") applyLook();  // staff changed the look mid-song
   // only a state fetched after this song started can say it was skipped (an older response predates /api/next)
   const skipped = current && asked > current.since && (scene === "upnext" || scene === "singing" || scene === "video") && (!state.now_playing || state.now_playing.id !== current.id);
   if (skipped) return abort();
+  const np = state.now_playing;
+  if (current && np && np.id === current.id && np.restarts !== current.restarts) { current.restarts = np.restarts; restartSong(); }
   if (unlocked && state.synctest && scene === "lobby" && !busy) startSyncTest();
   if (!state.synctest && scene === "synctest") stopSyncTest();
   if (scene === "lobby" && !busy && unlocked && (state.queue.length || state.now_playing)) next();
@@ -330,6 +347,11 @@ async function next() {
 }
 
 function abort() { run++; stopAudio(); stopVideo(""); current = null; song = null; show("lobby"); next(); }
+// Staff pressed Start again: the same song from the top, title card and all. Still counting in: it starts there anyway.
+function restartSong() {
+  if (scene === "singing" && song) { startSong(song); look = null; applyLook(); }
+  else if (scene === "video" && player?.seekTo) { player.seekTo(0, true); player.playVideo(); }
+}
 
 async function perform(entry) {
   const my = ++run;
@@ -337,7 +359,8 @@ async function perform(entry) {
   current = { ...entry, since: performance.now() };
   const cover = entry.song_id && `/library/${encodeURIComponent(entry.song_id)}/cover.jpg`;
   const forced = state?.display?.theme;  // staff can set one theme for the whole night
-  setTheme(forced && forced !== "auto" ? forced : entry.theme || "cover", cover, entry.song_id);
+  const scenes = nightScenes();
+  setTheme(forced && forced !== "auto" && forced !== "venue" ? forced : scenes ? another(scenes, themeName) : entry.theme || "cover", cover, entry.song_id);
   $("upWho").textContent = entry.name;
   $("upSong").textContent = [entry.title, entry.artist].filter(Boolean).join(" – ");
   renderBar();
@@ -418,10 +441,16 @@ async function sing(entry, bufs, alive) {
 
 // ---------------------------------------------------------------- main loop
 
-let lobbyTheme = 0;
+let lobbyTheme = 0, lobbyLook;
 function cycleLobbyTheme() {
   if (scene !== "lobby") return;
-  const names = Object.keys(THEMES).filter(n => n !== "celtic" || state?.look?.look === "pub");  // Irish only in the pub look
+  lobbyLook = `${lookShown()} ${state?.display?.theme}`;
+  const scenes = nightScenes();
+  if (scenes) {  // one theme all night: its scenes take turns
+    const next = another(scenes, themeName);
+    return next === themeName || setTheme(next, null, `lobby-${lobbyTheme++}`);
+  }
+  const names = Object.keys(THEMES).filter(n => !THEMES[n].look || THEMES[n].look === lookShown());  // Irish only in the pub look
   setTheme(names[lobbyTheme++ % names.length], null, `lobby-${lobbyTheme}`);
 }
 

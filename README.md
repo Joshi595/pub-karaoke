@@ -1,5 +1,9 @@
 # Pub Karaoke
 
+**Dedicated pub PC:** [Laptop-free setup, automatic startup, backups and rehearsal](docs/pub-pc-setup.md).
+The TV and music stay local; phones can connect through the free internet link. Hosting needs no subscription,
+but the free tunnel has a changing address and no uptime guarantee. Hardware, power and internet are separate.
+
 [![Tests](https://github.com/Joshi595/pub-karaoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Joshi595/pub-karaoke/actions/workflows/tests.yml)
 [![Security](https://github.com/Joshi595/pub-karaoke/actions/workflows/security.yml/badge.svg)](https://github.com/Joshi595/pub-karaoke/actions/workflows/security.yml)
 [![CodeQL](https://github.com/Joshi595/pub-karaoke/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Joshi595/pub-karaoke/security/code-scanning)
@@ -71,7 +75,7 @@ cd pub-karaoke
 ./start.sh      # opens the TV screen full-screen in Chrome or Chromium
 ```
 
-**First start:** setup creates `settings.json` with a random **staff PIN** and shows it. Write it down, or open `settings.json` in a text editor to read or change it. Staff open `/admin` on their phone and enter it there.
+**First start:** setup creates `settings.json` with a random **staff PIN**. Open that file locally in a text editor to read or change it. Staff open `/admin` using the guest/internet address and enter it there. An existing default PIN is backed up and replaced automatically on startup.
 
 **The full song list:** at first, guests can only find the songs in `starter-songs.txt`. To let them search about 90,000 songs, download the CSV song list from [KaraFun's song list page](https://www.karafun.com/karaoke-song-list.html) and save it as `library/karafuncatalog.csv`, then restart. Download it again now and then for new songs.
 
@@ -125,7 +129,9 @@ To force a look for a song, add it after the title: `Nena - 99 Luftballons | neo
 | `hide_explicit`, `languages` | Hide explicit songs; only show songs in these languages (empty = all). |
 | `auto_download`, `library_max_gb` | Make likely songs while idle, up to this much disk (20 GB, about 2,000 songs). |
 | `internet_link` | Open the internet link when cloudflared is installed (on). *File only.* |
-| `port` | The app's port (5000). *File only.* |
+| `port` | Local TV port (5000), bound only to loopback. *File only.* |
+| `guest_port` | Public/LAN guest and staff interface (5001). The tunnel and reverse proxies must target this port. *File only.* |
+| `maker_timeout_seconds`, `min_free_gb` | Maximum preparation time per attempt (3600 seconds) and free disk reserve (5 GB). Requests and background jobs respect the library limit. |
 | `public_url` | A fixed address for the QR code, if you run your own reverse proxy. Leave empty otherwise. *File only.* |
 | `display` | TV options: lyrics style, highlight, size, position, screen delay, and the song look (`"theme": "venue"` is tonight's theme everywhere). Set on the staff page under *TV screen*. |
 
@@ -144,7 +150,7 @@ Phones must reach the laptop. There are two ways.
 3. Give the laptop a fixed address in the router (a DHCP reservation), so printed QR codes keep working.
 4. On Windows, allow the app through the firewall, for private networks only, in an administrator terminal:
    ```
-   netsh advfirewall firewall add rule name="Pub Karaoke" dir=in action=allow protocol=TCP localport=5000 profile=private
+   netsh advfirewall firewall add rule name="Pub Karaoke guests" dir=in action=allow protocol=TCP localport=5001 profile=private
    ```
    If the Wi-Fi shows as *Public* in Windows, switch it to *Private* under *Settings → Network → Wi-Fi*.
 
@@ -208,7 +214,9 @@ While the app runs, it makes songs by itself. For days it isn't running, schedul
 
 After an update, open pages (the TV, phones, the staff page) load the new version by themselves; the TV waits until no song is playing.
 4. Print table cards and a staff sheet from `http://localhost:5000/print`.
-5. At the end of the night, close the TV screen (Alt+F4) and the server window. A restart within 12 hours keeps the queue; the next night starts fresh.
+5. Staff can close requests or start a fresh night on the staff page. Sessions roll over at 6 am Europe/Berlin,
+   after any playing song finishes. A restart during the same night keeps the queue. The dedicated kiosk reopens
+   its browser if closed; stop its task/supervisor when intentionally shutting down.
 
 **Before the first real night:**
 - Do the sync test once: staff page → *TV screen* → *Start sync test*, then move *Screen delay* until the flash lands on the click.
@@ -250,6 +258,11 @@ python -m venv .venv
 ```
 
 The tests need no graphics card, songs or network.
+
+For tests without browser tooling use `python -m pytest -q --ignore=test_browser.py`. Browser regressions use
+synthetic audio: install `requirements-test.txt`, run `python -m playwright install chromium`, then
+`python -m pytest -q test_browser.py`. Both suites run in CI. See the dedicated-PC guide for actual TV/audio and
+CPU/GPU checks that still need a rehearsal at the venue.
 
 | Path | What it is |
 |---|---|

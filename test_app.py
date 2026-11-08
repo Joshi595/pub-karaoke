@@ -136,6 +136,13 @@ import json
 from app import create_app
 
 
+def complete_fixture(folder):
+    """API fixtures represent a published song, including both audio stems and lyrics."""
+    (folder / "instrumental.m4a").write_bytes(b"fixture audio")
+    (folder / "vocals.m4a").write_bytes(b"fixture audio")
+    (folder / "lyrics.json").write_text("[]")
+
+
 @pytest.fixture
 def client(tmp_path):
     (tmp_path / "settings.json").write_text(json.dumps({"pin": "9999", "port": 5000}))
@@ -145,7 +152,10 @@ def client(tmp_path):
     song = tmp_path / "library" / "a-b"
     song.mkdir(parents=True)
     (song / "song.json").write_text(json.dumps({"artist": "A", "title": "B", "year": 1990, "theme": "pop", "help_vocals": 0.25}))
-    return create_app(tmp_path).test_client()
+    complete_fixture(song)
+    application = create_app(tmp_path)
+    yield application.test_client()
+    application.config["shutdown"]()
 
 
 def ready_shelf(client):
@@ -185,6 +195,7 @@ def test_songs_made_while_running_show_up(client, tmp_path):
     assert ready_shelf(client) == ["a-b"]
     (tmp_path / "library" / "c-d").mkdir()
     (tmp_path / "library" / "c-d" / "song.json").write_text(json.dumps({"artist": "C", "title": "D"}))
+    complete_fixture(tmp_path / "library" / "c-d")
     assert ready_shelf(client) == ["a-b", "c-d"]
     assert client.get("/api/search?q=d").json["songs"][0]["status"] == "ready"
     assert client.post("/api/queue", json={"name": "Anna", "device": "d1", "song_id": "c-d"}).status_code == 200
@@ -215,17 +226,18 @@ def test_guests_pick_from_the_whole_list(pub, client):
     assert pick("Dan", "nope").json["error"] == "unknown_song"
     import app
     app.has_synced_lyrics = lambda artist, title: None                      # monkeypatch undoes this after the test
-    assert pick("Dan", "k2").json["error"] == "offline"
+    assert pick("Dan", "k2").status_code == 200  # the successful lyric check is cached for ten minutes
     st = client.get("/api/state").json
-    assert [(e["name"], e["status"]) for e in st["queue"]] == [("Anna", "ready"), ("Ben", "waiting"), ("Cara", "video")]
+    assert [(e["name"], e["status"]) for e in st["queue"]] == [("Anna", "ready"), ("Ben", "waiting"), ("Cara", "video"), ("Dan", "waiting")]
     assert json.loads((pub / "history.json").read_text(encoding="utf-8")).keys() == {"k1", "k2", "k3"}
-    assert [s["title"] for s in client.get("/api/browse?shelf=here").json["songs"]] == ["B", "Zombie", "No Lyrics"]
+    assert [s["title"] for s in client.get("/api/browse?shelf=here").json["songs"]] == ["Zombie", "B", "No Lyrics"]
 
 
 def test_staff_song_care(pub, client):
     lib = pub / "library"
     (lib / "c-d").mkdir()
     (lib / "c-d" / "song.json").write_text(json.dumps({"artist": "C", "title": "D", "sync": {"v": 2, "aligned": 0.9}}))
+    complete_fixture(lib / "c-d")
     client.post("/api/queue", json={"name": "Cara", "device": "d3", "catalog_id": "k3", "video": True})
     get = lambda: client.get("/api/admin/songs", headers=PIN).json
     assert client.get("/api/admin/songs").status_code == 403
@@ -275,6 +287,9 @@ for line in sys.stdin:
         slug = re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
         (pathlib.Path("library") / slug).mkdir(parents=True, exist_ok=True)
         (pathlib.Path("library") / slug / "song.json").write_text(json.dumps({"artist": "Good", "title": "Song"}))
+        (pathlib.Path("library") / slug / "lyrics.json").write_text("[]")
+        for stem in ("instrumental.m4a", "vocals.m4a"):
+            (pathlib.Path("library") / slug / stem).write_bytes(b"fixture audio")
         print("STAGE separate 40", flush=True)
         print("SLUG " + slug, flush=True)
     elif t.startswith("Flaky"):
@@ -383,7 +398,7 @@ def test_staff_screen_settings_are_checked_saved_and_shown(client, tmp_path):
     assert saved["display"]["screen_delay_ms"] == 120 and saved["pin"] == "9999"
     for bad in ({"display": {"layout": "sideways"}}, {"pin": "0000"}, {"display": {"screen_delay_ms": True}},
                 {"songs_per_singer": 99}, {"display": {"evil": 1}}, ["not", "a", "dict"]):
-        assert client.post("/api/admin/settings", json=bad, headers=PIN).json["error"] == "bad_setting"
+        assert client.post("/api/admin/settings", json=bad, headers=PIN).json["error"] == ("bad_request" if isinstance(bad, list) else "bad_setting")
     assert client.get("/api/state").json["display"]["layout"] == "scroll"       # a refused change leaves everything as it was
 
 
@@ -434,7 +449,7 @@ def test_second_server_on_same_port_is_refused():
     second.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # what waitress does on its own bind
     try:
         with pytest.raises(OSError):
-            second.bind(("0.0.0.0", port))
+            second.bind(("127.0.0.1", port))  # same private listener address as the first server
     finally:
         second.close(); first.close()
 
@@ -690,7 +705,7 @@ def test_tonights_special_night_reaches_every_page(client):
     pin = {"X-Pin": "9999"}
     client.post("/api/admin/settings", json={"look": "pub", "accent": "#d4af37"}, headers=pin)
     assert client.get("/api/state").json["look"]["night"] == ""
-    day = tonight(datetime.now()).isoformat()
+    day = client.get("/api/state").json["event"]["date"]
     assert client.post("/api/admin/settings", json={"nights": [{"date": day, "look": "halloween", "yearly": False}]}, headers=pin).status_code == 200
     look = client.get("/api/state").json["look"]
     assert look["night"] == "halloween" and look["look"] == "pub" and look["accent"] == "#d4af37"  # the staff page still sees its own
@@ -701,7 +716,7 @@ def test_staff_pick_tonights_theme(client):
     pin = {"X-Pin": "9999"}
     pick = lambda look, headers=pin: client.post("/api/admin/tonight", json={"look": look}, headers=headers)
     state = lambda: client.get("/api/state").json
-    day = tonight(datetime.now())
+    day = date.fromisoformat(state()["event"]["date"])
     client.post("/api/admin/settings", json={"look": "pub"}, headers=pin)
     assert pick("halloween").status_code == 200
     assert state()["look"]["night"] == "halloween" and state()["nights"] == [{"date": day.isoformat(), "look": "halloween", "yearly": False}]

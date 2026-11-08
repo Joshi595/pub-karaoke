@@ -119,3 +119,6 @@ body { font-family: var(--body-font); }
 
 #start { position: fixed; inset: 0; z-index: 9; display: grid; place-content: center; text-align: center; background: #000d; font-size: 4vh; cursor: pointer; }
 #start[hidden] { display: none; }
+/* Connection feedback stays outside the song canvas. Prepared audio continues locally. */
+#connection { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: #331a09; color: #fff; padding: 10px; text-align: center; font: 18px sans-serif; }
+#recovering { display: grid; place-content: center; text-align: center; font-size: 3vw; }

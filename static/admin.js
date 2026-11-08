@@ -98,6 +98,17 @@ const T = {
                 size: { S: "Klein", M: "Mittel", L: "Groß", XL: "Sehr groß" }, position: { middle: "Mitte", lower: "Unteres Drittel" },
                 theme: { auto: "Passend zu jedem Song", venue: "Thema des Abends", celtic: "Irisch", neon80s: "80er-Neon", disco: "Disco", rock: "Rock", ballad: "Ballade", pop: "Pop", cover: "Albumfarben", halloween: "Halloween" } } },
 };
+Object.assign(T.en, { eventTitle: "Tonight's event", newEvent: "Start a fresh night", newEventSure: "Tap again to clear the queue",
+  closeRequests: "Close requests", openRequests: "Reopen requests", requestOpen: "Requests open", requestClosed: "Requests closed",
+  healthTitle: "System status", failedAction: "The change did not complete. Check the connection and try again.",
+  storageFull: "Storage is full. Free some disk space before preparing more songs.", backupProblem: "Backup needs attention", backupOk: "Last backup",
+  noBackup: "No successful backup yet", online: "Internet link connected", localOnly: "Local access only — internet link unavailable", workerUnavailable: "Song maker is not installed" });
+Object.assign(T.de, { eventTitle: "Heutiger Abend", newEvent: "Neuen Abend starten", newEventSure: "Nochmal tippen: Warteschlange löschen",
+  closeRequests: "Songwünsche schließen", openRequests: "Songwünsche wieder öffnen", requestOpen: "Songwünsche offen", requestClosed: "Songwünsche geschlossen",
+  healthTitle: "Systemstatus", failedAction: "Die Änderung wurde nicht abgeschlossen. Verbindung prüfen und erneut versuchen.",
+  storageFull: "Speicher voll. Vor weiteren Songs bitte Speicherplatz freigeben.", backupProblem: "Sicherung benötigt Aufmerksamkeit", backupOk: "Letzte Sicherung",
+  noBackup: "Noch keine erfolgreiche Sicherung", online: "Internetverbindung aktiv", localOnly: "Nur lokaler Zugriff — Internetlink nicht verfügbar", workerUnavailable: "Song-Macher ist nicht installiert" });
+
 const $ = id => document.getElementById(id);
 const store = (k, v) => { try { return v === undefined ? sessionStorage.getItem(k) : sessionStorage.setItem(k, v); } catch { return null; } };
 const local = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
@@ -108,12 +119,18 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 
 function toast(msg) { const b = $("toast"); b.textContent = msg; b.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => b.classList.remove("show"), 3000); }
 async function admin(path, body, method = "POST") {
+  try {
   const file = body instanceof Blob;  // the logo goes as it is; everything else as JSON
   const r = await fetch(`/api/admin/${path}`, { method, headers: { "Content-Type": file ? body.type : "application/json", "X-Pin": pin },
-                                                 body: file ? body : JSON.stringify(body || {}) });
+                                                 signal: AbortSignal.timeout(15000), body: file ? body : JSON.stringify(body || {}) });
   if (r.status === 403) { lockUp(); throw "pin"; }
   if (!r.ok) throw (await r.json().catch(() => ({}))).error || "error";
   poll();
+  return true;
+  } catch (code) {
+    if (code !== "pin") toast(code === "locked" ? t().locked : t()[code] || t().failedAction);
+    return false;
+  }
 }
 function lockUp() { pin = ""; store("pin", ""); $("lock").hidden = false; $("panel").hidden = true; }
 
@@ -169,6 +186,9 @@ function applyLang() {
 function render() {
   if (!state) return;
   const np = state.now_playing;
+  $("eventStatus").textContent = state.event?.open === false ? t().requestClosed : t().requestOpen;
+  $("eventToggle").textContent = state.event?.open === false ? t().openRequests : t().closeRequests;
+  $("newEvent").disabled = !!np;
   $("who").textContent = np ? np.name : t().nobody;
   $("what").textContent = np ? `${np.title}, ${np.artist}` : t().idle;
   for (const [b, id, text] of [[$("skip"), skipId, t().skip], [$("restart"), restartId, t().restart]]) {
@@ -281,12 +301,37 @@ function renderNights() {
 }
 
 async function poll() {
+  if (poll.active) return;
+  poll.active = true;
   try {
-    state = await (await fetch("/api/state")).json(); render();
+    const response = await fetch("/api/state", { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error("state");
+    state = await response.json(); render();
+    $("connection").hidden = true;
     reloadIfUpdated(state.version, !document.activeElement?.matches("input, select") && !document.querySelector("[data-armed]"));
   }
-  catch { toast(t().offline); }
+  catch { $("connection").hidden = false; }
+  finally { poll.active = false; }
+  if (pin && Date.now() - (poll.healthAt || 0) > 10000) {
+    poll.healthAt = Date.now(); loadHealth();
+  }
   if ($("songCare").open) loadCare();
+}
+
+async function loadHealth() {
+  try {
+    const r = await fetch("/api/admin/health", { headers: { "X-Pin": pin }, signal: AbortSignal.timeout(5000) });
+    if (r.status === 403) return lockUp();
+    if (!r.ok) throw new Error("health");
+    const h = await r.json();
+    $("networkStatus").textContent = `${h.connection.internet ? t().online : t().localOnly}. ${h.connection.lan_url}`;
+    $("diskStatus").textContent = h.storage.blocked ? t().storageFull : `${h.storage.library_gb} GB / ${h.storage.free_gb} GB free`;
+    $("workerStatus").textContent = !h.worker.available ? t().workerUnavailable : h.worker.job.wish
+      ? t().makingNow(h.worker.job.wish, t().stages[h.worker.job.stage] || h.worker.job.stage, h.worker.job.pct || 0) : t().idleMaker;
+    if (h.worker.last_error) $("workerStatus").textContent += ` · ${h.worker.last_error}`;
+    $("backupStatus").textContent = h.backup.error ? `${t().backupProblem}: ${h.backup.error}` : h.backup.last_success
+      ? `${t().backupOk}: ${new Intl.DateTimeFormat(lang, { dateStyle: "short", timeStyle: "short" }).format(new Date(h.backup.last_success * 1000))}` : t().noBackup;
+  } catch { $("connection").hidden = false; }
 }
 
 // Songs: what the song maker is doing, and the songs that need a hand.
@@ -370,6 +415,10 @@ $("logoFile").onchange = e => {
 $("earlier").onclick = () => admin("nudge", { delta: 0.1 });
 $("later").onclick = () => admin("nudge", { delta: -0.1 });
 $("syncTest").onclick = () => admin("synctest", { on: !state.synctest });
+$("eventToggle").onclick = () => admin("event", { action: state.event?.open === false ? "open" : "close" });
+$("newEvent").onclick = () => confirmTap($("newEvent"), t().newEventSure, async () => {
+  await admin("event", { action: "start" }); $("newEvent").textContent = t().newEvent;
+});
 document.querySelectorAll(".lang button").forEach(b => b.onclick = () => { lang = b.dataset.lang; local("lang", lang); applyLang(); });
 
 applyLang();

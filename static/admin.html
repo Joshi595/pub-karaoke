@@ -30,6 +30,19 @@
   </section>
 
   <main id="panel" hidden>
+    <p id="connection" role="status" data-t="offline" hidden></p>
+    <section aria-labelledby="eventTitle">
+      <h2 id="eventTitle" data-t="eventTitle"></h2>
+      <p id="eventStatus" role="status"></p>
+      <div class="buttons">
+        <button class="btn" type="button" id="eventToggle"></button>
+        <button class="btn" type="button" id="newEvent" data-t="newEvent"></button>
+      </div>
+    </section>
+    <details class="settings">
+      <summary data-t="healthTitle"></summary>
+      <p id="networkStatus"></p><p id="diskStatus"></p><p id="workerStatus"></p><p id="backupStatus"></p>
+    </details>
     <section class="stage" aria-live="polite">
       <p class="who" id="who"></p>
       <p class="what" id="what"></p>

@@ -80,6 +80,27 @@ const T = {
   },
 };
 
+Object.assign(T.en, { reconnect: "Connection lost. Retrying… If the address changed, scan the TV again.",
+  recovery: "Keep or recover your songs", recoveryHelp: "Keep this private code. If you rescan a new TV address, paste it below to recover your tickets.",
+  recoveryCode: "Your private recovery code", recoverCode: "Recovery code", recover: "Recover my songs", recovered: "Your songs are restored.",
+  closed: "Requests are closed for now. Staff can reopen them.", checking: "Queued", });
+Object.assign(T.de, { reconnect: "Verbindung unterbrochen. Neuer Versuch… Bei einer neuen Adresse den TV erneut scannen.",
+  recovery: "Songs behalten oder wiederherstellen", recoveryHelp: "Diesen privaten Code aufbewahren. Nach dem Scannen einer neuen TV-Adresse unten eingeben, um deine Tickets wiederherzustellen.",
+  recoveryCode: "Dein privater Wiederherstellungscode", recoverCode: "Wiederherstellungscode", recover: "Meine Songs wiederherstellen", recovered: "Deine Songs wurden wiederhergestellt.",
+  closed: "Songwünsche sind gerade geschlossen. Das Personal kann sie wieder öffnen.", checking: "Wartet", });
+Object.assign(T.en.err, { bad_request: "Please check your entry and try again.", storage_full: "Song storage is full. Pick a Ready song or ask staff.",
+  busy: "A lot of requests right now. Please try again in a few seconds.", guest_required: "Please reload to reconnect your ticket.",
+  bad_recovery: "That recovery code is invalid or expired.", event_closed: "Requests are closed. Please ask staff." });
+Object.assign(T.de.err, { bad_request: "Bitte die Eingabe prüfen und erneut versuchen.", storage_full: "Songspeicher voll. Einen fertigen Song wählen oder das Personal fragen.",
+  busy: "Gerade viele Anfragen. Bitte in ein paar Sekunden erneut versuchen.", guest_required: "Bitte neu laden, um dein Ticket zu verbinden.",
+  bad_recovery: "Dieser Code ist ungültig oder abgelaufen.", event_closed: "Songwünsche sind geschlossen. Bitte das Personal fragen." });
+T.en.badge.make = "Needs preparation"; T.de.badge.make = "Wird vorbereitet";
+T.en.wishText = "Request a song. You can sing once it is ready.";
+T.de.wishText = "Song wünschen. Du kannst singen, sobald er fertig ist.";
+T.en.wished = "Added! Your song is queued for preparation. Watch the screen for your name.";
+T.de.wished = "Eingetragen! Dein Song wartet auf die Vorbereitung. Achte auf deinen Namen am Bildschirm.";
+T.en.waitingMake = "Waiting for preparation."; T.de.waitingMake = "Wartet auf die Vorbereitung.";
+
 const $ = id => document.getElementById(id);
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -90,6 +111,17 @@ let lang = ["en", "de"].includes(param) ? param : store.get("lang") || ((navigat
 let device = store.get("device");
 if (!device) { device = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set("device", device); }
 let name = store.get("name") || "";
+let guestToken = store.get("guest_token") || "", guestPending = null;
+async function ensureGuest() {
+  if (!guestPending) guestPending = (async () => {
+    const r = await fetch("/api/guest", { method: "POST", headers: { "X-Guest-Token": guestToken }, signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw "busy";
+    const data = await r.json();
+    guestToken = data.token; store.set("guest_token", guestToken);
+    $("recoveryCode").value = guestToken;
+  })().finally(() => { guestPending = null; });
+  return guestPending;
+}
 let state = null, pendingSong = null;
 // What the list shows: a shelf, an artist's songs, or search results for what's typed.
 let view = { kind: "shelf", shelf: "ready", page: 0 }, rows = [], artists = [], hasMore = false, seq = 0;
@@ -107,8 +139,10 @@ function errorText(code) {
   return typeof e === "function" ? e(state ? state.songs_per_singer : 2) : e;
 }
 async function api(method, url, body) {
+  if (method === "POST" && (url === "/api/queue" || url === "/api/wish") && !guestToken) await ensureGuest();
   let r;
-  try { r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }); }
+  try { r = await fetch(url, { method, headers: { "Content-Type": "application/json", "X-Guest-Token": guestToken },
+    signal: AbortSignal.timeout(20000), body: body ? JSON.stringify(body) : undefined }); }
   catch { throw "network"; }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw data.error || "network";
@@ -161,7 +195,7 @@ function songRow(s, q) {
   const mineIds = new Set(state ? state.queue.filter(e => e.mine).map(e => e.song.title + "\n" + e.song.artist) : []);
   const mine = mineIds.has(s.title + "\n" + s.artist);
   const b = el("button", "row");
-  b.type = "button"; b.disabled = mine; b.translate = false;
+  b.type = "button"; b.disabled = mine || state?.event?.open === false; b.translate = false;
   const info = el("span", "info"), title = el("span", "t"), by = el("span", "a");
   title.append(...marked(s.title, q));
   by.append(...marked(s.artist, q), s.year ? `, ${s.year}` : "");
@@ -261,6 +295,7 @@ function renderState() {
   }
   $("me").hidden = !name;
   $("meText").textContent = name ? t().singingAs(name) : "";
+  $("eventClosed").hidden = state.event?.open !== false;
 
   const tickets = [];
   if (np && np.mine) tickets.push(ticket(np, t().now, t().onNow, true));
@@ -350,16 +385,29 @@ $("wishForm").addEventListener("submit", async ev => {
 });
 
 async function poll() {
+  if (poll.active) return;
+  poll.active = true;
   try {
     state = await api("GET", `/api/state?device=${encodeURIComponent(device)}`);
     renderState();
+    $("connection").hidden = true;
     reloadIfUpdated(state.version, !document.querySelector("dialog[open]") && !document.activeElement?.matches("input, textarea"));
     const mine = state.queue.filter(e => e.mine).map(e => e.song.title).join();
     if (mine !== poll.mine) { poll.mine = mine; renderList(); }  // redraw the list only when its badges change, so taps aren't lost
-  } catch { /* the next poll retries */ }
+  } catch { $("connection").hidden = false; }
+  finally { poll.active = false; }
 }
+$("recoverForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  try {
+    const data = await api("POST", "/api/guest/recover", { code: $("recoverInput").value.trim() });
+    guestToken = data.token; store.set("guest_token", guestToken); $("recoveryCode").value = guestToken;
+    $("recoverInput").value = ""; poll(); toast(t().recovered);
+  } catch (code) { toast(errorText(code), true); }
+});
 (async function start() {
   applyLang();
+  try { await ensureGuest(); } catch { $("connection").hidden = false; }
   await poll();
   openShelf("ready");
   setInterval(poll, 2000);

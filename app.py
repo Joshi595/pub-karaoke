@@ -1,5 +1,6 @@
 """Pub Karaoke live app: guest phones, staff phone and the TV, all on the venue's laptop."""
 import hmac
+import atexit
 import ipaddress
 import json
 import os
@@ -16,11 +17,13 @@ from datetime import date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo
 
 from flask import Flask, abort, jsonify, request, send_from_directory
 
 from catalog import Catalog
 from make_songs import KARAFUN_LIST, has_synced_lyrics, library_gb
+from operations import backup, backup_library, completed_song, process_options, stop_process, token_digest
 
 NEW_NIGHT_AFTER = 12 * 3600
 MAX_QUEUE = 60  # the whole queue: anonymous phones can't flood it with made-up names
@@ -33,15 +36,23 @@ class QueueError(Exception):
 
 def write_json(path, data, indent=None):
     """Write via a temp file so a crash never leaves half a file behind."""
-    tmp = Path(str(path) + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent), encoding="utf-8")
-    for attempt in range(5):  # antivirus or the indexer can hold the file for a moment on Windows
+    tmp = Path(str(path) + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent), encoding="utf-8")
+        for attempt in range(5):
+            try:
+                tmp.replace(path)
+                return True
+            except PermissionError:
+                time.sleep(0.05 * (attempt + 1))
+        return False
+    except OSError:
+        return False
+    finally:
         try:
-            tmp.replace(path)
-            return True
-        except PermissionError:
-            time.sleep(0.05 * (attempt + 1))
-    return False
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def clean_name(s):
@@ -63,6 +74,21 @@ class Party:
         # can_make: this laptop has the song maker, so wished songs are waited for. Without it, a wish plays as a
         # karaoke video max_wait seconds after it was picked.
         self.max_wait, self.can_make = max_wait, can_make
+        self.event_date = self.day()
+        self.event_open = True
+
+    def day(self):
+        return tonight(datetime.fromtimestamp(self.now(), ZoneInfo("Europe/Berlin"))).isoformat()
+
+    def new_event(self, opened=True):
+        self.queue, self.turns, self.now_playing = [], {}, None
+        self.paused, self.synctest, self.nudge = False, False, 0.0
+        self.event_date, self.event_open = self.day(), opened
+        self.save()
+
+    def rollover(self):
+        if self.day() != self.event_date and not self.now_playing:
+            self.new_event()
 
     def add(self, name, device, song_id, wish=None, yt=(), catalog=None, video=False):
         """A wish is a song not in the library yet: it plays from the library once made, else from YouTube (yt ids).
@@ -85,6 +111,8 @@ class Party:
     def check(self, name, song_id, wish=None):
         """Would this pick be accepted? Raises like add(), so phones hear 'no' before any slow lookup."""
         name = clean_name(name)
+        if not self.event_open:
+            raise QueueError("event_closed")
         if len(self.queue) >= MAX_QUEUE:
             raise QueueError("full")
         mine = [e for e in self.queue if e["name"].lower() == name.lower()]
@@ -171,7 +199,7 @@ class Party:
         self.save()
         return True
 
-    SAVED = ("queue", "turns", "now_playing", "paused", "volume", "help_vocals", "nudge")
+    SAVED = ("queue", "turns", "now_playing", "paused", "volume", "help_vocals", "nudge", "event_date", "event_open")
 
     def save(self):
         if self.path and not write_json(self.path, {**{k: getattr(self, k) for k in self.SAVED}, "saved_at": self.now()}):
@@ -188,6 +216,9 @@ class Party:
             return p
         for k in cls.SAVED:
             setattr(p, k, state.get(k, getattr(p, k)))
+        if "event_date" not in state:
+            p.event_date = tonight(datetime.fromtimestamp(state.get("saved_at", now()), ZoneInfo("Europe/Berlin"))).isoformat()
+        p.rollover()
         return p
 
 
@@ -196,7 +227,8 @@ class Party:
 SHELVES = ("ready", "here", "top", "classics", "irish", "german", "schlager", "80s", "rock", "country", "duets")
 LOOKS = ("stage", "pub", "neon", "daylight", "halloween")
 DEFAULT_SETTINGS = {"pin": "1234", "songs_per_singer": 2, "upnext_seconds": 15, "wifi_name": "", "wifi_password": "",
-                    "pub_name": "Karaoke Night", "port": 5000, "public_url": "", "max_wait_seconds": 90,
+                    "pub_name": "Karaoke Night", "port": 5000, "guest_port": 5001, "public_url": "", "max_wait_seconds": 90,
+                    "maker_timeout_seconds": 3600, "min_free_gb": 5,
                     "hide_explicit": True, "languages": [], "auto_download": True, "library_max_gb": 20,
                     "internet_link": True, "look": "stage", "accent": "", "icon": "🎤", "logos": [], "nights": [],
                     "shelves": ["ready", "here", "top", "classics", "80s", "rock", "country", "duets"]}
@@ -330,6 +362,8 @@ EDITABLE = {
     "languages": names,  # song languages guests can find; empty = all
     "auto_download": flag,
     "library_max_gb": number(1, 2000, int),
+    "maker_timeout_seconds": number(30, 14400, int),
+    "min_free_gb": number(0, 100, int),
     "pub_name": words(40),
     "look": one_of(*LOOKS),
     "accent": colour,
@@ -378,6 +412,8 @@ def lyric_lines(folder):
 def load_songs(library):
     songs = {}
     for f in sorted(library.glob("*/song.json")):
+        if not completed_song(f.parent):
+            continue
         try:
             songs[f.parent.name] = {**json.loads(f.read_text(encoding="utf-8")), "id": f.parent.name}
         except (OSError, ValueError):  # half-written, or held by the antivirus for a moment: picked up next time
@@ -417,7 +453,7 @@ def lan_ip():
         return "127.0.0.1"
 
 
-def bind_exclusive(port):
+def bind_exclusive(port, host="127.0.0.1"):
     """Listening socket nobody else can share. A second copy of the app (staff double-clicking the icon again)
     must fail loudly instead of silently splitting the queue between two servers on one port."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -426,7 +462,7 @@ def bind_exclusive(port):
     else:  # macOS/Linux: a restart may reuse the port at once; a second live copy is still refused
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
-        s.bind(("0.0.0.0", port))  # phones on the Wi-Fi must reach the laptop  # nosec B104
+        s.bind((host, port))
         s.listen(128)
     except OSError:
         s.close()
@@ -440,8 +476,18 @@ def ensure_settings(root):
     if not f.exists():
         pin = f"{secrets.randbelow(10 ** 6):06d}"
         write_json(f, {**DEFAULT_SETTINGS, "pin": pin}, indent=1)
-        print(f"Created settings.json. Staff PIN: {pin} (write it down; change it in settings.json)", flush=True)
+        print("Created settings.json. Read the private staff PIN in that file on this PC.", flush=True)
     return f
+
+
+class PublicIngress:
+    """Listener identity is server-owned, never inferred from a caller-supplied HTTP header."""
+    def __init__(self, application):
+        self.application = application
+
+    def __call__(self, environ, start_response):
+        environ["karaoke.public"] = True
+        return self.application(environ, start_response)
 
 
 def create_app(root):
@@ -461,7 +507,7 @@ def create_app(root):
     songs = load_songs(library)
     party = Party.load(root / "state.json", songs, settings["songs_per_singer"])
     party.max_wait = settings["max_wait_seconds"]
-    lock = threading.Lock()
+    lock = threading.RLock()
     static = root / "static"
     app = Flask(__name__, static_folder=str(static), static_url_path="/static")
     app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # every request is a few hundred bytes of JSON
@@ -483,7 +529,7 @@ def create_app(root):
             "style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; "
             "form-action 'self'; object-src 'none'")
         r.headers["X-Content-Type-Options"] = "nosniff"
-        r.headers["Referrer-Policy"] = "no-referrer"
+        r.headers["Referrer-Policy"] = "strict-origin-when-cross-origin" if request.path == "/tv" else "no-referrer"
         r.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
         r.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         r.headers["Cross-Origin-Resource-Policy"] = "same-origin"
@@ -502,7 +548,12 @@ def create_app(root):
 
     def refresh_library(force=False):
         """Songs made beside the app (its own maker, the nightly run) show up without a restart; deleted ones go."""
-        found = {p.name for p in library.iterdir() if p.is_dir()}
+        try:
+            found = tuple((str(p.relative_to(library)), p.stat().st_mtime_ns, p.stat().st_size)
+                          for p in sorted(library.glob("*/*")) if p.is_file()
+                          and p.name in LIBRARY_FILES)
+        except OSError:
+            return  # a concurrent atomic replacement will be picked up on the next poll
         if force or found != seen[0]:
             seen[0] = found
             fresh = load_songs(library)
@@ -524,19 +575,18 @@ def create_app(root):
     party.can_make = maker_py.exists()
     making, wake, proc = {}, threading.Event(), [None]  # making: wish, catalog, stage, pct
     failed = {}  # wish -> failed tries tonight; GIVE_UP or more: not tried again tonight
+    worker_status = {"last_error": "", "last_finished": None}
     retimes = []  # songs staff asked to time again
     GIVE_UP = 2
     gave_up = lambda: {w for w, n in failed.items() if n >= GIVE_UP}
 
-    # The two long stages report only when they start; fill in by how long they usually take (RTX 3060, overlap 4)
-    LONG_STAGES = {"separate": (25, 75, 150), "timing": (75, 95, 60)}  # stage: (from %, to %, usual seconds)
-
     def progress():
-        pct = making.get("pct", 0)
-        if making.get("stage") in LONG_STAGES:
-            lo, hi, secs = LONG_STAGES[making["stage"]]
-            pct = lo + (hi - lo) * min(0.95, (time.time() - making.get("since", time.time())) / secs)
-        return int(pct)
+        return int(making.get("pct", 0))  # actual milestones; GPU-based estimates mislead on a CPU
+
+    def storage():
+        used, free = library_gb(library), shutil.disk_usage(root).free / 1e9
+        return {"library_gb": round(used, 2), "free_gb": round(free, 2),
+                "blocked": used >= settings["library_max_gb"] or free < settings["min_free_gb"]}
 
     def entry_status(e):
         if e["song_id"] in songs:
@@ -574,8 +624,28 @@ def create_app(root):
             (root / "work").mkdir(exist_ok=True)
             log = open(root / "work" / "maker.log", "a", encoding="utf-8")
             # overlap 4: ~2.5 min per song on an RTX 3060 instead of ~3.5 at the overnight default of 8, slightly more vocal bleed
-            p = proc[0] = subprocess.Popen([str(maker_py), "-X", "utf8", "-u", "make_songs.py", "--serve", "--overlap=4"], cwd=root,
-                                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True, encoding="utf-8", errors="replace")
+            try:
+                p = proc[0] = subprocess.Popen([str(maker_py), "-X", "utf8", "-u", "make_songs.py", "--serve", "--overlap=4"], cwd=root,
+                                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True,
+                                               encoding="utf-8", errors="replace", **process_options())
+            finally:
+                log.close()
+        expired = threading.Event()
+        def expire():
+            expired.set()
+            stop_process(p)
+        deadline = threading.Timer(settings["maker_timeout_seconds"], expire)
+        deadline.daemon = True
+        deadline.start()
+        try:
+            return read_job(p, text, expired)
+        finally:
+            deadline.cancel()
+            if expired.is_set() or p.poll() is not None:
+                proc[0] = None
+                p.stdin.close(); p.stdout.close()
+
+    def read_job(p, text, expired):
         p.stdin.write(text + "\n")
         p.stdin.flush()
         for line in p.stdout:
@@ -586,18 +656,23 @@ def create_app(root):
                     making.update(stage=stage, pct=int(pct) if pct.isdigit() else 0, since=time.time())
             elif kind in ("SLUG", "FAIL"):
                 return (rest, "") if kind == "SLUG" else (None, rest)
-        return None, "the song maker stopped"
+        return None, "error: song maker timeout" if expired.is_set() else "the song maker stopped"
 
     def next_job():
         """Guests' songs first (in singing order), then songs staff want re-timed, then this pub's favourites."""
         given_up = gave_up()
         e = next_to_make(party, given_up)
+        if storage()["blocked"]:
+            if retimes:  # timing existing files is still useful; do not download another recording
+                slug = retimes.pop(0)
+                return {"wish": f"RETIME {slug}", "catalog": None, "retime": slug}
+            return None
         if e:
             return {"wish": e["wish"], "catalog": e.get("catalog")}
         if retimes:
             slug = retimes.pop(0)
             return {"wish": f"RETIME {slug}", "catalog": None, "retime": slug}
-        if not settings["auto_download"] or library_gb(library) >= settings["library_max_gb"]:
+        if not settings["auto_download"]:
             return None
         # idle: this pub's favourites, made before anyone asks
         skip = set(status) | {cid for cid, w in prefetched.items() if w in given_up}
@@ -617,10 +692,10 @@ def create_app(root):
         if making.get("prefetch") and p and p.poll() is None:
             making["interrupted"] = True
             # the venv's python.exe is a launcher with the real interpreter as its child: end both
-            subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True) if os.name == "nt" else p.kill()
+            stop_process(p)
 
     def maker_loop():
-        while True:
+        while not stopping.is_set():
             try:
                 make_next()
             except Exception as err:  # one bad song or locked file must not stop the song maker for the night
@@ -634,7 +709,7 @@ def create_app(root):
             job = next_job()
             if job:
                 making.clear()
-                making.update(job, stage="starting", pct=0)
+                making.update(job, stage="starting", pct=0, started=time.time())
         if not job:
             wake.wait(30)
             wake.clear()
@@ -647,6 +722,7 @@ def create_app(root):
         wish = job["wish"]
         with lock:
             interrupted = making.get("interrupted")
+            elapsed = round(time.time() - making.get("started", time.time()), 1)
             making.clear()
             refresh_library(force=True)
             if interrupted:
@@ -654,16 +730,19 @@ def create_app(root):
             if job.get("retime"):
                 return print(f"Re-timed: {job['retime']}" if slug else f"Couldn't re-time {job['retime']}: {why}", flush=True)
             if slug in songs:
+                worker_status.update(last_error="", last_finished=time.time())
+                print(f"Prepared in {elapsed}s", flush=True)
                 party.made(wish, slug)
                 return print(f"Ready: {slug}", flush=True)
             # no lyrics or no recording won't change tonight; a crash or a network blip might: one more try
             lasting = not why.startswith("error") and why != "the song maker stopped"
             failed[wish] = GIVE_UP if lasting else failed.get(wish, 0) + 1
+            worker_status.update(last_error=f"{wish}: {why}", last_finished=time.time())
             print(f"Couldn't make {wish!r}: {why}", flush=True)
             if failed[wish] < GIVE_UP:
                 return
             no_video = any(e.get("wish") == wish and not e["song_id"] and not e.get("yt") for e in party.queue)
-        yt = karaoke_videos(wish) if no_video else []  # the fallback search may not have finished yet: don't drop anyone early
+        yt = lookup_videos(wish) if no_video else []
         with lock:
             for e in party.queue:
                 if e.get("wish") == wish and not e.get("yt"):
@@ -673,8 +752,8 @@ def create_app(root):
                 status[job["catalog"]] = "failed"
                 write_json(status_file, status)
 
-    if maker_py.exists():
-        threading.Thread(target=maker_loop, daemon=True).start()
+    stopping = threading.Event()
+    background_threads = []
 
     def remember_pick(cid):
         if cid:
@@ -683,46 +762,64 @@ def create_app(root):
 
     def find_videos(text):
         """The YouTube karaoke fallback for a song being made, looked up after the guest has their answer."""
-        yt = karaoke_videos(text)
-        with lock:
-            for e in party.queue:
-                if e.get("wish") == text and not e.get("yt"):
-                    e["yt"] = yt
-            party.save()
+        try:
+            yt = lookup_videos(text)
+            with lock:
+                for e in party.queue:
+                    if e.get("wish") == text and not e.get("yt"):
+                        e["yt"] = yt
+                party.save()
+        finally:
+            video_slots.release()
 
     # The internet link: many venue Wi-Fis keep phones from reaching the laptop, so phones come in over the internet
     # instead, through a free Cloudflare tunnel (cloudflared, installed by setup or put in tools/). Its address is new
     # each time it starts; the TV's QR code follows it.
     tunnel = [None]
+    tunnel_proc = [None]
     tunnel_exe = Path(shutil.which("cloudflared") or root / "tools" / "cloudflared.exe")
 
     def run_tunnel():
-        while True:
+        while not stopping.is_set():
+            startup_timeout = None
             try:
-                p = subprocess.Popen([str(tunnel_exe), "tunnel", "--no-autoupdate", "--url", f"http://localhost:{settings['port']}"],
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+                p = tunnel_proc[0] = subprocess.Popen([str(tunnel_exe), "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{settings['guest_port']}"],
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", **process_options())
+                startup_timeout = threading.Timer(180, lambda process=p: stop_process(process))
+                startup_timeout.daemon = True
+                startup_timeout.start()
                 for line in p.stdout:
                     url = tunnel_address(line)
                     if url and url != tunnel[0]:
-                        tunnel_online(url)  # the QR code shows it only once phones can find it
-                        time.sleep(5)  # a little longer, for Cloudflare's own servers to catch up
+                        if not tunnel_online(url):
+                            continue
+                        startup_timeout.cancel()
                         tunnel[0] = url
                         print(f"Guests over the internet: {url}/", flush=True)
             except OSError as err:
                 print(f"Internet link problem: {err}", flush=True)
+            finally:
+                if startup_timeout:
+                    startup_timeout.cancel()
             tunnel[0] = None
             print("Internet link dropped; trying again in 10 s. Phones on the pub's own network still work.", flush=True)
-            time.sleep(10)
+            stopping.wait(10)
 
     def start_tunnel():  # called once the server has its port, so a refused second copy leaves no stray tunnel
         if settings["internet_link"] and tunnel_exe.exists():
-            threading.Thread(target=run_tunnel, daemon=True).start()
+            t = threading.Thread(target=run_tunnel, daemon=True)
+            background_threads.append(t); t.start()
 
     app.config["start_tunnel"] = start_tunnel
-    join_url = lambda: settings["public_url"] or (tunnel[0] and tunnel[0] + "/") or f"http://{lan_ip()}:{settings['port']}/"
+    join_url = lambda: settings["public_url"] or (tunnel[0] and tunnel[0] + "/") or f"http://{lan_ip()}:{settings['guest_port']}/"
 
     def body():
-        return request.get_json(silent=True) or {}
+        value = request.get_json(silent=True)
+        if value is None and not request.get_data():
+            return {}
+        if not isinstance(value, dict):
+            raise QueueError("bad_request")
+        return value
 
     wrong_pins = {}  # device address -> (failures, locked_until)
     internet_fails = []  # when wrong PINs came in over the internet link, for the last 10 minutes
@@ -731,24 +828,137 @@ def create_app(root):
     # phone. Only requests from this laptop may carry it: a phone on the Wi-Fi could fake it to dodge the lockout.
     # Requests over the internet are never the TV, however local they look.
     via_internet = lambda: request.remote_addr in ("127.0.0.1", "::1") and ("Cf-Connecting-Ip" in request.headers or "Cf-Ray" in request.headers)
+    public_request = lambda: bool(request.environ.get("karaoke.public")) or via_internet()
     client_ip = lambda: (via_internet() and request.headers.get("Cf-Connecting-Ip")) or request.remote_addr
+
+    guests_file = root / "guests.json"
+    guests = read_json(guests_file, {})
+    guests = guests if isinstance(guests, dict) else {}
+    limits, lookup_cache = {}, {}
+    lookup_slots, video_slots = threading.BoundedSemaphore(2), threading.BoundedSemaphore(2)
+
+    def rate_limit(bucket, key, count, seconds):
+        now = time.monotonic()
+        with lock:
+            expired = [k for k, (_, until) in limits.items() if until <= now]
+            for k in expired:
+                limits.pop(k, None)
+            k = (bucket, key)
+            used, until = limits.get(k, (0, now + seconds))
+            if used >= count or (k not in limits and len(limits) >= 4096):
+                raise QueueError("busy")
+            limits[k] = (used + 1, until)
+
+    def guest_device(required=False):
+        token = request.headers.get("X-Guest-Token", "")
+        record = guests.get(token_digest(token)) if 32 <= len(token) <= 128 else None
+        if record and record.get("at", 0) >= time.time() - 30 * 86400:
+            return record["device"]
+        if required and public_request():
+            raise QueueError("guest_required")
+        return None
+
+    def cached_lookup(key, fn):
+        with lock:
+            hit = lookup_cache.get(key)
+            if hit and hit[0] > time.monotonic():
+                return hit[1]
+        if not lookup_slots.acquire(blocking=False):
+            raise QueueError("busy")
+        try:
+            value = fn()
+            with lock:
+                if len(lookup_cache) >= 512:
+                    lookup_cache.pop(next(iter(lookup_cache)))
+                lookup_cache[key] = (time.monotonic() + (600 if value else 5), value)
+            return value
+        finally:
+            lookup_slots.release()
+
+    def lookup_videos(text):
+        try:
+            return cached_lookup(("video", text), lambda: karaoke_videos(text))
+        except QueueError:
+            return []
+
+    def allowed_song(cid=None, slug=None):
+        i = catalog.by_id.get(str(cid)) if cid else catalog.by_slug.get(slug)
+        return i is not None and catalog._allowed(i, **filters())
+
+    @app.before_request
+    def ingress_policy():
+        if public_request() and (request.path in ("/tv", "/print", "/api/next", "/api/done")
+                                 or request.path.startswith("/library/")):
+            return jsonify(error="forbidden"), 403
+        if request.path.startswith("/api/"):
+            with lock:
+                old = party.event_date
+                party.rollover()
+                if old != party.event_date:
+                    failed.clear(); prefetched.clear()
+        if public_request() and request.method == "POST" and request.path in ("/api/queue", "/api/wish"):
+            owner = guest_device(required=True)
+            rate_limit("pick-guest", owner, 5, 60)
+            rate_limit("pick-ip", client_ip(), 60, 60)
+        if public_request() and request.path == "/api/search":
+            rate_limit("search", client_ip(), 600, 60)
+
+    @app.post("/api/guest")
+    def guest_create():
+        with lock:
+            owner = guest_device()
+            if owner:
+                token = request.headers["X-Guest-Token"]
+            else:
+                rate_limit("guest-create", client_ip(), 240, 3600)
+                token, owner = secrets.token_urlsafe(32), uuid.uuid4().hex
+                cutoff = time.time() - 30 * 86400
+                for key in [key for key, r in guests.items() if r.get("at", 0) < cutoff]:
+                    guests.pop(key)
+                if len(guests) >= 5000:
+                    raise QueueError("busy")
+                guests[token_digest(token)] = {"device": owner, "at": time.time()}
+                if not write_json(guests_file, guests):
+                    guests.pop(token_digest(token), None)
+                    raise QueueError("storage_full")
+            return jsonify(token=token, recovery_code=token)
+
+    @app.post("/api/guest/recover")
+    def guest_recover():
+        rate_limit("recover", client_ip(), 10, 60)
+        token = body().get("code")
+        if not isinstance(token, str) or not 32 <= len(token) <= 128:
+            raise QueueError("bad_recovery")
+        with lock:
+            record = guests.get(token_digest(token))
+            if not record or record.get("at", 0) < time.time() - 30 * 86400:
+                raise QueueError("bad_recovery")
+        return jsonify(token=token, recovery_code=token)
+
+    @app.get("/api/health")
+    def health():
+        return jsonify(ok=True)
 
     def admin(fn):
         @wraps(fn)
         def wrapped(*a, **kw):
             with lock:  # the counts below are shared by 16 server threads
                 who, now = client_ip(), time.time()
-                fails, until = wrong_pins.get(who, (0, 0))
+                for address in [address for address, record in wrong_pins.items() if now - record[2] > 600]:
+                    wrong_pins.pop(address, None)
+                fails, until, _ = wrong_pins.get(who, (0, 0, now))
                 internet_fails[:] = [t for t in internet_fails if now - t < 600]
                 # many addresses guessing at once (one attacker can have thousands): the internet way in closes for
                 # all for a while; staff on the laptop or the venue's own Wi-Fi aren't affected
                 if now < until or (via_internet() and len(internet_fails) >= 30):
                     return jsonify(error="locked"), 429
-                if via_internet() and str(settings["pin"]) == DEFAULT_SETTINGS["pin"]:
+                if public_request() and str(settings["pin"]) == DEFAULT_SETTINGS["pin"]:
                     return jsonify(error="pin_too_easy"), 409  # the staff page is on the internet: 1234 won't do
                 if not hmac.compare_digest(request.headers.get("X-Pin", "").encode(), str(settings["pin"]).encode()):
                     fails += 1  # five wrong guesses lock that device out for a minute
-                    wrong_pins[who] = (0, now + 60) if fails >= 5 else (fails, 0)
+                    if who not in wrong_pins and len(wrong_pins) >= 4096:
+                        return jsonify(error="locked"), 429
+                    wrong_pins[who] = (0, now + 60, now) if fails >= 5 else (fails, 0, now)
                     if via_internet():
                         internet_fails.append(now)
                     return jsonify(error="forbidden"), 403
@@ -773,7 +983,7 @@ def create_app(root):
         def wrapped(*a, **kw):
             # JSON only: a browser asks first before another website may send that, so no web page open on this
             # laptop can skip singers; and the TV is opened by address, never by a website's name
-            if via_internet() or not from_laptop(request.remote_addr) or not request.is_json or not local_host(request.host):
+            if public_request() or not from_laptop(request.remote_addr) or not request.is_json or not local_host(request.host):
                 return jsonify(error="forbidden"), 403
             return fn(*a, **kw)
         return wrapped
@@ -781,7 +991,10 @@ def create_app(root):
     @app.errorhandler(QueueError)
     def queue_error(e):
         code = e.args[0]
-        return jsonify(error=code), 403 if code == "forbidden" else 400
+        response = jsonify(error=code)
+        if code == "busy":
+            response.headers["Retry-After"] = "5"
+        return response, 429 if code == "busy" else 403 if code in ("forbidden", "guest_required") else 400
 
     for page in ("admin", "tv", "print"):
         app.add_url_rule(f"/{page}", page, lambda page=page: send_from_directory(static, f"{page}.html"))
@@ -804,7 +1017,7 @@ def create_app(root):
     def api_browse():
         """A shelf of songs to scroll (?shelf=top&page=0), or every song by one artist (?artist=Queen)."""
         page = request.args.get("page", "0")
-        page = int(page) if page.isdigit() else 0
+        page = int(page) if page.isdigit() and len(page) <= 6 else 0
         with lock:
             refresh_library()
             artist = request.args.get("artist")
@@ -815,7 +1028,7 @@ def create_app(root):
     def venue_look():
         """The everyday look, and tonight's special-night look when there is one (look.js shows that one instead).
         With the logos of the look that shows: its own, else the ones for every look. The TV changes between several."""
-        night = night_look(settings["nights"], tonight(datetime.now()))
+        night = night_look(settings["nights"], date.fromisoformat(party.day()))
         mine = lambda look: [f"/logo/{e['file']}" for e in settings["logos"] if e["look"] == look]
         shown = mine(night or settings["look"]) or mine("")
         return {**{k: settings[k] for k in ("look", "accent", "icon")}, "logo": shown[0] if shown else "", "logos": shown, "night": night}
@@ -828,12 +1041,13 @@ def create_app(root):
 
     @app.get("/api/state")
     def api_state():
-        device = request.args.get("device")
+        device = guest_device() or (None if public_request() else request.args.get("device"))
         with lock:
             return jsonify(queue=[view(e, device) for e in party.upcoming()], now_playing=playing(device),
                            paused=party.paused, volume=party.volume, help_vocals=party.help_vocals,
                            join_url=join_url(),  # the Wi-Fi password is for the TV and table cards, not the internet
-                           wifi={"name": settings["wifi_name"], "password": "" if via_internet() else settings["wifi_password"]},
+                           wifi={"name": settings["wifi_name"], "password": "" if public_request() else settings["wifi_password"]},
+                           event={"date": party.event_date, "open": party.event_open},
                            pub_name=settings["pub_name"], look=venue_look(), nights=settings["nights"], logos=settings["logos"], version=version(),
                            shelves=settings["shelves"], upnext_seconds=settings["upnext_seconds"],
                            songs_per_singer=settings["songs_per_singer"], nudge=party.nudge, synctest=party.synctest,
@@ -845,25 +1059,29 @@ def create_app(root):
         """A guest picks a song: from the library (song_id) or from the whole list (catalog_id).
         A song nobody has made yet is checked for timed lyrics first, then made before the guest's turn."""
         b = body()
-        name, device, cid = b.get("name"), b.get("device", ""), b.get("catalog_id")
+        name, device, cid = b.get("name"), guest_device(required=True) or b.get("device", ""), b.get("catalog_id")
         if not cid:
             with lock:
+                if not isinstance(b.get("song_id"), str) or not allowed_song(slug=b["song_id"]):
+                    raise QueueError("unknown_song")
                 return jsonify(view(party.add(name, device, b.get("song_id")), device))
         clean_name(name)
         with lock:
             refresh_library()
             row = catalog.get(str(cid))
-            if not row:
+            if not row or not allowed_song(cid=cid):
                 raise QueueError("unknown_song")
             if row["status"] == "ready":
                 entry = party.add(name, device, row["slug"], catalog=row["id"])
                 remember_pick(row["id"])
                 return jsonify(view(entry, device))
             text = f"{row['artist']} - {row['title']}"
+            if party.can_make and storage()["blocked"]:
+                raise QueueError("storage_full")
             party.check(name, "", text)  # over the limit or already queued: say so before the slow checks
             known = status.get(row["id"]) or ("failed" if text in gave_up() else None)
         if known is None:  # the network checks run outside the lock so other phones aren't held up
-            ok = has_synced_lyrics(row["artist"], row["title"])
+            ok = cached_lookup(("lyrics", row["id"]), lambda: has_synced_lyrics(row["artist"], row["title"]))
             if ok is None:
                 raise QueueError("offline")
             if not ok:
@@ -874,7 +1092,7 @@ def create_app(root):
         if known:  # can't be made: the guest may still sing along to a YouTube karaoke video
             if not b.get("video"):
                 raise QueueError("no_lyrics")
-            yt = karaoke_videos(text)
+            yt = lookup_videos(text)
             if not yt:
                 raise QueueError("no_video")
             with lock:
@@ -887,22 +1105,32 @@ def create_app(root):
             out = view(entry, device)
             hurry()
         wake.set()
-        threading.Thread(target=find_videos, args=(text,), daemon=True).start()
+        if video_slots.acquire(blocking=False):
+            threading.Thread(target=find_videos, args=(text,), daemon=True).start()
         return jsonify(out)
 
     @app.delete("/api/queue/<entry_id>")
     def api_remove(entry_id):
         with lock:
-            party.remove(entry_id, device=request.args.get("device"))
+            party.remove(entry_id, device=guest_device(required=True) or request.args.get("device"))
         return jsonify(ok=True)
 
     @app.post("/api/wish")
     def api_wish():
         b = body()
+        device = guest_device(required=True) or b.get("device", "")
         text = " ".join(re.sub("[–—]", "-", str(b.get("text", ""))).split())[:120]  # "ABBA – Waterloo" -> "ABBA - Waterloo"
         if not text or text.startswith("RETIME "):  # that's a command to the song maker, for staff only
             return jsonify(error="empty"), 400
         with lock:
+            if party.can_make and storage()["blocked"]:
+                raise QueueError("storage_full")
+            artist, sep, title = text.partition(" - ")
+            if sep:
+                from make_songs import slugify
+                slug = slugify(artist, title)
+                if slug in catalog.by_slug and not allowed_song(slug=slug):
+                    raise QueueError("unknown_song")
             party.check(b.get("name"), "", text)  # fail fast, before the slow YouTube search
             hopeless = text in gave_up()  # tried tonight and couldn't be made
             wishes = root / "wishes.txt"
@@ -910,12 +1138,12 @@ def create_app(root):
             if not hopeless and text not in known and len(known) < 1000:
                 with wishes.open("a", encoding="utf-8") as f:
                     f.write(text + "\n")  # the nightly maker run picks it up even if tonight's attempt fails
-        yt = karaoke_videos(text)
+        yt = lookup_videos(text)
         if hopeless and not yt:
             raise QueueError("no_video")
         with lock:
-            entry = party.add(b.get("name"), b.get("device", ""), "", wish=text, yt=yt, video=hopeless)
-            out = view(entry, b.get("device"))
+            entry = party.add(b.get("name"), device, "", wish=text, yt=yt, video=hopeless)
+            out = view(entry, device)
             if not hopeless:
                 hurry()
         wake.set()
@@ -941,6 +1169,33 @@ def create_app(root):
     @admin
     def admin_check():
         return jsonify(ok=True)
+
+    @app.post("/api/admin/event")
+    @admin
+    def admin_event():
+        action = body().get("action")
+        if action == "start":
+            if party.now_playing:
+                raise QueueError("song_playing")
+            party.new_event()
+            failed.clear(); prefetched.clear()
+        elif action in ("close", "open"):
+            party.event_open = action == "open"
+            party.save()
+        else:
+            raise QueueError("bad_request")
+        wake.set()
+        return jsonify(ok=True)
+
+    @app.get("/api/admin/health")
+    @admin
+    def admin_health():
+        return jsonify(ok=True, storage=storage(), worker={"available": party.can_make,
+                       "running": bool(proc[0] and proc[0].poll() is None), "job": dict(making),
+                       "timeout_seconds": settings["maker_timeout_seconds"], **worker_status},
+                       connection={"internet": bool(tunnel[0] or settings["public_url"]), "join_url": join_url(),
+                                   "lan_url": f"http://{lan_ip()}:{settings['guest_port']}/"},
+                       backup=maintenance_status)
 
     @app.post("/api/admin/skip")
     @admin
@@ -1035,7 +1290,7 @@ def create_app(root):
         upcoming = [e["wish"] for e in party.upcoming() if e.get("wish") and not party.ready(e) and not e.get("video")]
         return jsonify(making={**making, "pct": progress()} if making else {}, next=upcoming + [f"Re-time: {song_name(s)}" for s in retimes],
                        weak=[{"slug": slug, "name": song_name(slug), "aligned": aligned(songs[slug])} for _, slug in weak],
-                       failed=failed_rows, disk_gb=round(library_gb(library), 1))
+                       failed=failed_rows, disk_gb=round(library_gb(library), 1), storage=storage())
 
     @app.post("/api/admin/retime")
     @admin
@@ -1095,7 +1350,7 @@ def create_app(root):
     def admin_tonight():
         """Tonight's theme, picked on the staff page: a one-off special night for tonight, ahead of any yearly one.
         Picking what tonight would show anyway (the everyday look, or tonight's yearly night) just drops the one-off."""
-        look, day = body().get("look"), tonight(datetime.now())
+        look, day = body().get("look"), date.fromisoformat(party.day())
         if look not in LOOKS:
             raise QueueError("bad_setting")
         rest = [n for n in settings["nights"] if n["date"] != day.isoformat() or n["yearly"]]
@@ -1144,22 +1399,39 @@ def create_app(root):
         set_logos([e for e in settings["logos"] if e["file"] != body().get("file")])
         return jsonify(ok=True)
 
-    app.config["settings"] = settings
+    backup_marker = root / "backups" / "last-success.json"
+    maintenance_status = {"last_success": read_json(backup_marker, {}).get("at"), "error": ""}
+
+    def maintain():
+        while not stopping.is_set():
+            try:
+                latest = maintenance_status["last_success"] or 0
+                if time.time() - latest >= 86400:
+                    # Snapshot metadata under the same lock as mutations. Large immutable audio copies run outside it.
+                    with lock:
+                        backup(root)
+                    backup_library(root)
+                    maintenance_status.update(last_success=time.time(), error="")
+                    write_json(backup_marker, {"at": maintenance_status["last_success"]})
+            except (OSError, ValueError) as err:
+                maintenance_status["error"] = str(err)
+            stopping.wait(300)
+
+    def shutdown():
+        stopping.set(); wake.set()
+        stop_process(proc[0]); stop_process(tunnel_proc[0])
+        for thread in background_threads:
+            if thread is not threading.current_thread():
+                thread.join(timeout=5)
+
+    app.config.update(settings=settings, party=party, shutdown=shutdown, lock=lock,
+                      start_maintenance=lambda: threading.Thread(target=maintain, daemon=True).start())
+    if maker_py.exists():
+        t = threading.Thread(target=maker_loop, daemon=True)
+        background_threads.append(t); t.start()
     return app
 
 
 if __name__ == "__main__":
-    import waitress
-    here = Path(__file__).resolve().parent
-    app = create_app(here)
-    port = app.config["settings"]["port"]
-    try:
-        sock = bind_exclusive(port)
-    except OSError:
-        raise SystemExit(f"Port {port} is taken: Pub Karaoke is already running, or another program uses it (on macOS, "
-                         f"AirPlay Receiver uses 5000). Close it, or set another \"port\" in settings.json.")
-    guests = app.config["settings"]["public_url"] or f"http://{lan_ip()}:{port}/"
-    print(f"Pub Karaoke running. Guests: {guests}   TV: http://localhost:{port}/tv")
-    app.config["start_tunnel"]()
-    # phones poll every 2 s and keep connections open: allow plenty, drop idle ones fast; ident "": no Server header
-    waitress.serve(app, sockets=[sock], threads=16, connection_limit=500, channel_timeout=30, ident="")
+    from run_karaoke import serve
+    serve(Path(__file__).resolve().parent)

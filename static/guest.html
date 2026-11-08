@@ -23,6 +23,8 @@
   </header>
 
   <p class="stage" id="stage" aria-live="polite"></p>
+  <p id="connection" class="connection" role="status" data-t="reconnect" hidden></p>
+  <p id="eventClosed" role="status" data-t="closed" hidden></p>
   <p class="me" id="me" hidden><span id="meText"></span> <button type="button" class="link" id="rename" data-t="change"></button></p>
 
   <section class="tickets" id="tickets" hidden aria-labelledby="ticketsTitle">
@@ -46,6 +48,17 @@
       <button class="ghost" data-t="wishButton"></button>
     </form>
   </section>
+  <details class="recovery">
+    <summary data-t="recovery"></summary>
+    <p data-t="recoveryHelp"></p>
+    <label for="recoveryCode" data-t="recoveryCode"></label>
+    <input id="recoveryCode" readonly autocomplete="off" spellcheck="false">
+    <form id="recoverForm">
+      <label for="recoverInput" data-t="recoverCode"></label>
+      <input id="recoverInput" autocomplete="off" spellcheck="false" maxlength="128" required>
+      <button class="ghost" data-t="recover"></button>
+    </form>
+  </details>
 </div>
 
 <dialog id="nameDialog" aria-labelledby="nameTitle">

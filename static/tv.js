@@ -2,7 +2,18 @@
 // The server owns the queue; this page follows /api/state and plays whatever /api/next hands it.
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }).then(r => r.json());
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", signal: AbortSignal.timeout(10000),
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  const data = await r.json();
+  if (!r.ok && r.status !== 403) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+function timed(promise, ms, message) {
+  let timer;
+  return Promise.race([promise, new Promise((_, fail) => { timer = setTimeout(() => fail(new Error(message)), ms); })])
+    .finally(() => clearTimeout(timer));
+}
 const DEFAULT_PALETTE = ["rgb(31,107,74)", "rgb(201,160,69)", "rgb(140,59,42)"];
 
 // ---------------------------------------------------------------- audio
@@ -17,11 +28,11 @@ let sources = [], startedAt = 0;
 
 async function loadSong(slug) {
   const base = `/library/${encodeURIComponent(slug)}/`;
-  const get = async name => { const r = await fetch(base + name); if (!r.ok) throw new Error(`${slug}/${name} ${r.status}`); return r; };
+  const get = async name => { const r = await fetch(base + name, { signal: AbortSignal.timeout(30000) }); if (!r.ok) throw new Error(`${slug}/${name} ${r.status}`); return r; };
   const audio = async name => ctx.decodeAudioData(await (await get(name)).arrayBuffer());
-  const [inst, voc, lyrics, song] = await Promise.all([
+  const [inst, voc, lyrics, song] = await timed(Promise.all([
     audio("instrumental.m4a"), audio("vocals.m4a"), get("lyrics.json").then(r => r.json()), get("song.json").then(r => r.json()),
-  ]);
+  ]), 35000, "Song loading timed out");
   return { inst, voc, lyrics, song };
 }
 
@@ -265,7 +276,7 @@ function drawSyncTest() {
 
 // ---------------------------------------------------------------- scenes
 
-let state = null, scene = "lobby", current = null, song = null, run = 0, busy = false, unlocked = false;
+let state = null, scene = "lobby", current = null, song = null, run = 0, busy = false, unlocked = false, polling = false;
 function show(name) { document.querySelectorAll(".scene").forEach(s => s.hidden = s.id !== name); scene = name; }
 
 function renderLobby() {
@@ -307,8 +318,14 @@ function renderBar() {
 }
 
 async function poll() {
+  if (polling) return;
+  polling = true;
   const asked = performance.now();
-  try { state = await (await fetch("/api/state")).json(); } catch (e) { return; }
+  try {
+  const response = await fetch("/api/state", { signal: AbortSignal.timeout(5000) });
+  if (!response.ok) throw new Error("State unavailable");
+  state = await response.json();
+  $("connection").hidden = true;
   master.gain.setTargetAtTime(state.volume, ctx.currentTime, 0.05);
   vocGain.gain.setTargetAtTime(state.help_vocals ?? 0.25, ctx.currentTime, 0.05);
   if (unlocked) {
@@ -323,13 +340,15 @@ async function poll() {
   reloadIfUpdated(state.version, scene === "lobby" && !busy && !current);  // updated: the new files, between songs
   if (scene === "singing") applyLook();  // staff changed the look mid-song
   // only a state fetched after this song started can say it was skipped (an older response predates /api/next)
-  const skipped = current && asked > current.since && (scene === "upnext" || scene === "singing" || scene === "video") && (!state.now_playing || state.now_playing.id !== current.id);
+  const skipped = current && asked > current.since && ["upnext", "singing", "video", "recovering"].includes(scene) && (!state.now_playing || state.now_playing.id !== current.id);
   if (skipped) return abort();
   const np = state.now_playing;
   if (current && np && np.id === current.id && np.restarts !== current.restarts) { current.restarts = np.restarts; restartSong(); }
   if (unlocked && state.synctest && scene === "lobby" && !busy) startSyncTest();
   if (!state.synctest && scene === "synctest") stopSyncTest();
   if (scene === "lobby" && !busy && unlocked && (state.queue.length || state.now_playing)) next();
+  } catch (e) { $("connection").hidden = false; }
+  finally { polling = false; }
 }
 
 async function next() {
@@ -354,6 +373,32 @@ function restartSong() {
 }
 
 async function perform(entry) {
+  try { await performSong(entry); }
+  catch (e) {
+    console.error(e);
+    if (current?.id !== entry.id) return;
+    stopAudio(); stopVideo("");
+    await finish(entry, () => current?.id === entry.id, String(e));
+    if (current?.id === entry.id) { current = null; song = null; show("lobby"); next(); }
+  }
+}
+
+async function finish(entry, alive, error = "") {
+  // Retrying the SAME id is safe even when the server accepted a request whose response was lost.
+  let delay = 500;
+  while (alive()) {
+    try {
+      const result = await post("/api/done", { id: entry.id, ...(error ? { error } : {}) });
+      if (result.error) throw new Error(result.error);
+      return;
+    } catch {
+      show("recovering");
+      await sleep(delay); delay = Math.min(5000, delay * 2);
+    }
+  }
+}
+
+async function performSong(entry) {
   const my = ++run;
   const alive = () => my === run;
   current = { ...entry, since: performance.now() };
@@ -379,11 +424,14 @@ async function perform(entry) {
   if (!loading) loadError = await playVideo(entry.yt || []);
   if (!alive()) return;
   if (loadError) {  // a broken song folder or video must not block the night: drop it and move on
-    await post("/api/done", { id: entry.id, error: loadError }); current = null; show("lobby"); return next();
+    await finish(entry, alive, loadError);
+    if (!alive()) return;
+    current = null; show("lobby"); return next();
   }
   if (bufs) await sing(entry, bufs, alive);
   if (!alive()) return;
-  await post("/api/done", { id: entry.id });
+  await finish(entry, alive);
+  if (!alive()) return;
   $("clapWho").textContent = entry.name;
   show("applause");
   await sleep(4000);
@@ -394,15 +442,16 @@ async function perform(entry) {
 }
 
 // YouTube's player: loaded only the first time a wish is played, so the TV works without internet otherwise.
-let ytApi = null, player = null, videoEnded = null, videoPaused = false;
-const loadYt = () => ytApi ||= new Promise((ok, fail) => {
+let ytApi = null, player = null, videoEnded = null, videoPaused = false, videoWatch = null;
+const loadYt = () => ytApi ||= timed(new Promise((ok, fail) => {
   window.onYouTubeIframeAPIReady = ok;
   const s = document.createElement("script");
   s.src = "https://www.youtube.com/iframe_api";
   s.onerror = () => { ytApi = null; s.remove(); fail(new Error("YouTube not reachable")); };
   document.head.append(s);
-});
+}), 20000, "YouTube API timed out").catch(e => { ytApi = null; throw e; });
 function stopVideo(why) {
+  clearInterval(videoWatch); videoWatch = null;
   if (player) { player.destroy(); player = null; }
   $("video").replaceChildren();
   if (videoEnded) { videoEnded(why); videoEnded = null; }
@@ -417,7 +466,13 @@ async function playVideo(ids) {
     videoPaused = false;
     error = await new Promise(done => {
       videoEnded = done;
-      player = new YT.Player($("video").firstChild, { videoId: id, playerVars: { autoplay: 1, controls: 0, rel: 0, playsinline: 1 }, events: {
+      let advanced = Date.now(), lastTime = -1;
+      videoWatch = setInterval(() => {
+        const now = player?.getCurrentTime?.() ?? -1;
+        if (state?.paused || now > lastTime + 0.01) { advanced = Date.now(); lastTime = now; }
+        if (Date.now() - advanced > 30000) stopVideo("YouTube playback stalled");
+      }, 1000);
+      player = new YT.Player($("video").firstChild, { videoId: id, playerVars: { autoplay: 1, controls: 0, rel: 0, playsinline: 1, origin: location.origin }, events: {
         onReady: e => { e.target.setVolume(Math.round((state ? state.volume : 1) * 100)); e.target.playVideo(); },
         onStateChange: e => { if (e.data === YT.PlayerState.ENDED) stopVideo(""); },
         onError: e => stopVideo(`YouTube error ${e.data} on video ${id}`),

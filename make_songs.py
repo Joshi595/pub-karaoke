@@ -12,6 +12,7 @@ import time
 import unicodedata
 from datetime import date
 from pathlib import Path
+from operations import completed_song, maker_lock
 
 ROOT = Path(__file__).resolve().parent
 KARAFUN_LIST = "https://www.karafun.com/karaoke-song-list.html"  # the free CSV of ~90,000 songs guests search
@@ -566,8 +567,18 @@ def remake(slugs, library, work, model, overlap):
 
 
 def make_song(req, library, work, model, overlap=8, progress=lambda stage, pct: None, skip=lambda yt: False, tries=2, good_enough=0.3):
+    try:
+        return _make_song(req, library, work, model, overlap, progress, skip, tries, good_enough)
+    finally:
+        if req.get("artist"):
+            scratch = work / slugify(req["artist"], req["title"])
+            if scratch.is_dir() and not scratch.is_symlink() and scratch.resolve().parent == work.resolve():
+                shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _make_song(req, library, work, model, overlap, progress, skip, tries, good_enough):
     artist, title = req["artist"], req["title"]
-    if artist and (library / slugify(artist, title)).exists():
+    if artist and completed_song(library / slugify(artist, title)):
         return "exists"
     progress("lyrics", 5)
     lrc_cands = fetch_lrclib(artist, title)
@@ -583,20 +594,32 @@ def make_song(req, library, work, model, overlap=8, progress=lambda stage, pct: 
         artist, title = best["artistName"], best["trackName"]
         req["artist"], req["title"] = artist, title  # so main() can say which library folder this wish became
         lrc_cands = [c for c in lrc_cands if c["artistName"] == artist and c["trackName"] == title]
-        if (library / slugify(artist, title)).exists():
+        if completed_song(library / slugify(artist, title)):
             return "exists"
     if not any(c.get("syncedLyrics") for c in lrc_cands):
         return "skip: no synced lyrics on LRCLIB"
     progress("search", 10)
     pairs = []
     for query in (f"{artist} {title} official audio", f"{artist} {title} lyrics"):
-        pairs = [p for p in pick_pairs(lrc_cands, search_youtube(query, title)) if not skip(p[1])]
+        pairs = [p for p in pick_pairs(lrc_cands, search_youtube(query, title)) if not skip(p[1]) and p[1]["duration"] <= 600]
         if pairs:
             break
     if not pairs:
         return "skip: no lyrics/audio match"
 
     slug = slugify(artist, title)
+    limits_file = library.parent / "settings.json"
+    limits = json.loads(limits_file.read_text(encoding="utf-8-sig")) if limits_file.exists() else {}
+    def space_available(extra=0):
+        return (library_gb(library) + extra / 1e9 <= limits.get("library_max_gb", 20)
+                and shutil.disk_usage(library.parent).free >= limits.get("min_free_gb", 5) * 1e9)
+    if not space_available():
+        return "skip: error storage limit reached"
+    final = library / slug
+    if final.exists():
+        # Preserve partial data for inspection; only replace it after a complete replacement is ready.
+        if final.is_symlink() or not final.is_dir():
+            return "skip: error unsafe song directory"
     tmp = work / slug
     shutil.rmtree(tmp, ignore_errors=True)
     best = None  # (score, folder, lyrics, lang, video) of the attempt whose singing matched the lyrics best
@@ -640,7 +663,14 @@ def make_song(req, library, work, model, overlap=8, progress=lambda stage, pct: 
             "help_vocals": 0.25, "sync": {"v": 2, "aligned": score}, "video": yt["id"]}
     (out / "lyrics.json").write_text(json.dumps(lyrics, ensure_ascii=False), encoding="utf-8")
     (out / "song.json").write_text(json.dumps(song, ensure_ascii=False, indent=1), encoding="utf-8")
+    if not space_available(sum(f.stat().st_size for f in out.iterdir() if f.is_file())):
+        shutil.rmtree(tmp, ignore_errors=True)
+        return "skip: error storage limit reached"
     library.mkdir(exist_ok=True)
+    if final.exists():
+        quarantine = work / "incomplete" / (slug + "-" + str(time.time_ns()))
+        quarantine.parent.mkdir(parents=True, exist_ok=True)
+        final.replace(quarantine)
     os.replace(out, library / slug)  # atomic: a half-made song never shows up in the library
     shutil.rmtree(tmp, ignore_errors=True)
     return "ok"
@@ -655,7 +685,18 @@ def log_attention(line, reason):
 
 
 def library_gb(library):
-    return sum(f.stat().st_size for d in library.iterdir() if d.is_dir() for f in d.iterdir() if f.is_file()) / 1e9
+    total = 0
+    if not library.exists():
+        return 0
+    for d in library.iterdir():
+        if d.is_dir() and not d.is_symlink():
+            for f in d.iterdir():
+                try:
+                    if f.is_file():
+                        total += f.stat().st_size
+                except FileNotFoundError:
+                    pass
+    return total / 1e9
 
 
 def prefetch(n, library, work, model, overlap):
@@ -717,6 +758,19 @@ def serve(library, work, model, overlap):
 
 
 def main(argv=None):
+    with maker_lock(ROOT / "work"):
+        if os.name != "nt":
+            os.nice(10)
+        # Interrupted work is never served. Remove old scratch folders only while holding the maker lock.
+        for folder in (ROOT / "work").iterdir():
+            if (folder.is_dir() and not folder.is_symlink() and folder.name not in ("incomplete", "replaced")
+                    and re.fullmatch(r"[a-z0-9-]+", folder.name)
+                    and time.time() - folder.stat().st_mtime > 86400):
+                shutil.rmtree(folder)
+        return run_main(argv)
+
+
+def run_main(argv=None):
     ap = argparse.ArgumentParser(description="Make karaoke songs for the library.")
     ap.add_argument("--limit", type=int, default=0, help="stop after N new songs")
     ap.add_argument("--only", help='make just this "Artist - Title"')
@@ -732,6 +786,7 @@ def main(argv=None):
     def load_model():
         import stable_whisper
         import torch
+        torch.set_num_threads(max(1, (os.cpu_count() or 2) // 2))
         return stable_whisper.load_model(args.model or ("medium" if torch.cuda.is_available() else "base"), device="cpu")
 
     library, work = ROOT / "library", ROOT / "work"
@@ -753,7 +808,7 @@ def main(argv=None):
         wanted = parse_song_list(args.only)[0]
         key = lambda s: (s["artist"].lower(), s["title"].lower())
         songs = [s for s in songs if key(s) == key(wanted)] or [wanted]
-    pending = [s for s in songs if not (s["artist"] and (library / slugify(s["artist"], s["title"])).exists())]
+    pending = [s for s in songs if not (s["artist"] and completed_song(library / slugify(s["artist"], s["title"])))]
     print(f"{len(songs)} songs listed, {len(pending)} to make")
     if not pending:
         if args.only and songs[0]["artist"]:  # a wish for a song that's already made

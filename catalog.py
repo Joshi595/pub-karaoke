@@ -66,7 +66,16 @@ class Catalog:
         """songs: library slug -> song.json. lyrics: slug -> its lines, so a remembered line finds the song."""
         for slug, s in songs.items():
             if slug not in self.by_slug:
-                self._add(s.get("artist", ""), s.get("title", ""), id=slug)
+                i = self._add(s.get("artist", ""), s.get("title", ""), id=slug)
+                self.rows[i]["slug"] = slug
+                self.by_slug[slug] = i
+            i = self.by_slug[slug]
+            if self.rows[i]["id"] == slug:
+                artist, title = s.get("artist", ""), s.get("title", "")
+                self.rows[i].update(artist=artist, title=title)
+                key = fold(f"{artist} {title}")
+                self.keys[i], self.compact[i], self.words[i] = key, key.replace(" ", ""), key.split()
+                self.titles[i], self.artist_keys[i] = fold(re.sub(r"\(.*?\)|\[.*?\]", "", title)), fold(artist)
         self.ready = set(songs)
         self.lyrics = {slug: [(fold(line), line) for line in lines] for slug, lines in (lyrics or {}).items()}
 

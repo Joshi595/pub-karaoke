@@ -22,7 +22,7 @@ downloads and private print pages, and always removes the Wi-Fi password. A reve
   - Five wrong PINs lock that device out for a minute.
   - More than 30 wrong PINs over the internet in 10 minutes close the staff page to the internet for everyone, for up to 10 minutes. Staff on the laptop or the venue's own Wi-Fi can still get in.
   - The default PIN `1234` is refused over the internet.
-- **The TV:** only the laptop itself can start and finish songs. Those requests must come from the laptop's own address, carry JSON (which other websites can't send without asking), and name the laptop by address. That last check blocks DNS rebinding. Requests that arrive through the tunnel never count as the laptop.
+- **The TV:** only the laptop itself can start and finish songs. Those requests must come from the laptop's own address, carry JSON (which other websites can't send without asking), and name the laptop by address. That last check blocks DNS rebinding. Requests that arrive through the tunnel never count as the laptop. A TV on a separate laptop reaches the local TV port only through an SSH port forward whose key is limited to that port (`restrict,port-forwarding,permitopen`, a forced command, no passwords; see `install-autostart.ps1 -TvLaptopKey`), so the app's address checks are unchanged.
 - **Guests:**
   - Public queue changes require a cryptographically random server-issued guest token. Only its SHA-256 digest is
     stored in `guests.json`. The token is also the private recovery code for a new tunnel hostname; it expires

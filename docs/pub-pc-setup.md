@@ -10,7 +10,8 @@ See [Cloudflare's limitations](https://developers.cloudflare.com/tunnel/get-star
 ## Move to the pub PC
 
 1. Use a supported Windows 11 PC or Linux desktop, an SSD, wired networking where available, HDMI to the TV and a
-   wired audio connection to the mixer. Start with at least 16 GB RAM; allow more for CPU song preparation.
+   wired audio connection to the mixer. If the PC is too far from the TV, a laptop at the TV can show the screen and
+   play the sound instead: see [TV on a laptop at the TV](#tv-on-a-laptop-at-the-tv). Start with at least 16 GB RAM; allow more for CPU song preparation.
    A low-power mini PC can play prepared songs, but may prepare new songs slowly. Benchmark before buying hardware
    for fast live requests. A GPU is optional; there is no promised preparation time.
 2. Finish the current event and close the old server. Keep the laptop installation as a fallback.
@@ -74,6 +75,36 @@ The installer targets systemd Linux; macOS can continue using `./start.sh` manua
 Disable sleep while plugged in, schedule OS updates outside event hours, and enable power-on-after-power-loss in
 the BIOS if supported. These hardware/account settings must be checked on the actual pub PC.
 
+## TV on a laptop at the TV
+
+When the pub PC is too far from the TV, it stays the server and song maker, and a Windows laptop at the TV shows the
+screen and plays the sound. The laptop reaches the PC's local TV port through an SSH link built into Windows, so the
+TV-only rules above still hold: the link is encrypted, opens only with the laptop's key, and can reach only the TV
+port (no passwords, no commands, no other ports). Nothing needs installing on the laptop.
+
+1. Both machines must be on the venue's **staff network** (Wi-Fi or cable), not the guest Wi-Fi, which usually keeps
+   devices apart. Give the pub PC a fixed address in the router (a DHCP reservation), and set its network to
+   **Private** in Windows (*Settings > Network*).
+2. On the laptop, in a terminal: `ssh-keygen -t ed25519 -N ""`. Copy `%USERPROFILE%\.ssh\id_ed25519.pub` (the
+   public half only) to the pub PC, for example on a USB stick.
+3. On the pub PC, set up the app as above. Then, in an elevated PowerShell in the app folder:
+   `powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1 -TvLaptopKey D:\id_ed25519.pub`. This starts
+   the server at boot, opens no TV on the PC itself, switches on Windows' OpenSSH Server with passwords off and lets
+   only that key forward to the TV port, on private networks. It prints the `PUB_PC` value for the next step.
+4. Copy `tv-laptop.bat` to the laptop and set `PUB_PC` (and `TV_X`, `PORT` if needed) at its top. Run it: a
+   minimized window keeps the link up and the TV opens full-screen. To start it by itself, put a shortcut to it in
+   `shell:startup` (*Win+R*) and set the shortcut to run minimized.
+5. On the laptop: never sleep when plugged in, *When I close the lid: Do nothing*, sound output to the TV or
+   speakers, and a Windows password on its account. Run the sync test again: the laptop and TV have their own delay.
+
+The link reconnects by itself within seconds after a network drop or a restart of either machine. A song already
+playing usually finishes from the browser's buffer. If the TV stays on a blank page, look at the minimized link
+window for the reason. If the pub PC was reinstalled, its SSH host key changed: run `ssh-keygen -R ADDRESS` on the
+laptop once. Print joining cards on the laptop at `http://localhost:5000/print` while the link is up. On a Linux
+pub PC, install `openssh-server`, set `PasswordAuthentication no`, and put the same restricted line
+(`restrict,port-forwarding,permitopen="127.0.0.1:5000",command="exit" ssh-ed25519 …`) in the karaoke account's
+`~/.ssh/authorized_keys`.
+
 ## Staff operation and monitoring
 
 - Staff can close/reopen requests without interrupting the current queue. **Start a fresh night** clears queued
@@ -125,6 +156,7 @@ sound-device quality, YouTube availability at this venue or AI throughput on a d
 4. Run a **four-hour rehearsal** with several rounds and multiple phones. Test skip, pause, restart, closing requests,
    cancellation and a fresh-night reset. Check memory, free space and backup status at the start and finish.
 5. Disconnect internet during a prepared song. It must finish normally; test LAN joining and later reconnection.
+   With a TV laptop, also unplug its network mid-song and check that the TV recovers.
 6. End/restart the tunnel, rescan its new QR and recover one guest's tickets with the private recovery code.
 7. End the server process and close the kiosk browser separately. Each supervisor must recover its own process.
    Check that an old completion request never skips the next singer.

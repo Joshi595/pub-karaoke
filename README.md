@@ -3,6 +3,7 @@
 **Dedicated pub PC:** [Laptop-free setup, automatic startup, backups and rehearsal](docs/pub-pc-setup.md).
 The TV and music stay local; phones can connect through the free internet link. Hosting needs no subscription,
 but the free tunnel has a changing address and no uptime guarantee. Hardware, power and internet are separate.
+PC too far from the TV? [A laptop at the TV can show the screen and play the sound](docs/pub-pc-setup.md#tv-on-a-laptop-at-the-tv).
 
 [![Tests](https://github.com/Joshi595/pub-karaoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Joshi595/pub-karaoke/actions/workflows/tests.yml)
 [![Security](https://github.com/Joshi595/pub-karaoke/actions/workflows/security.yml/badge.svg)](https://github.com/Joshi595/pub-karaoke/actions/workflows/security.yml)

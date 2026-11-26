@@ -4,6 +4,7 @@ rem (if you say yes) the song maker. Safe to run again: it skips what is already
 rem   setup.bat /nomaker   skips the song maker question
 setlocal
 cd /d "%~dp0"
+if exist ".pub-tv\host_key" if /i not "%~1"=="/pub" (call Setup-Pub-PC.bat & exit /b)
 rem Exact versions known to work together. With an NVIDIA card: CUDA 12.6 builds; onnxruntime-gpu 1.27+ needs CUDA 13
 rem (NVIDIA driver 580+), while 1.26 uses the CUDA 12 files that come with torch.
 set "TORCH=torch==2.14.1 torchaudio==2.11.0"
@@ -32,11 +33,12 @@ if not exist .venv\Scripts\python.exe ("%PY%" -m venv .venv || goto :fail)
 .venv\Scripts\python -c "import app; app.ensure_settings('.')" || goto :fail
 
 if /i "%~1"=="/nomaker" goto :shortcut
+if /i "%~1"=="/pub" goto :maker
 echo.
 echo The song maker turns any song a guest picks into karaoke (about 5 GB, with the AI models).
 choice /c YN /m "Install the song maker"
 if errorlevel 2 goto :shortcut
-
+:maker
 where ffmpeg >nul 2>&1 || winget install -e --id Gyan.FFmpeg --accept-package-agreements --accept-source-agreements
 where node >nul 2>&1 || winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
 if not exist .venv-maker\Scripts\python.exe ("%PY%" -m venv .venv-maker || goto :fail)
@@ -52,8 +54,23 @@ where nvidia-smi >nul 2>&1 && (
   %PIP% -r requirements-maker.txt "audio-separator[cpu]==%SEPARATOR%" || goto :fail
 )
 
+if /i "%~1"=="/pub" exit /b 0
 :shortcut
 powershell -NoProfile -Command "$s = (New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Desktop') + '\Pub Karaoke.lnk'); $s.TargetPath = '%~dp0start-karaoke.bat'; $s.WorkingDirectory = '%~dp0'; $s.Save()"
+
+echo.
+echo On the pub PC, karaoke can start by itself whenever the PC is switched on (Windows asks for permission).
+choice /c YN /m "Start karaoke automatically"
+if errorlevel 2 goto :done
+set "AUTOARGS="
+choice /c YN /m "Is the TV on a separate laptop, using tv-laptop.bat"
+if errorlevel 2 goto :autostart
+set /p "KEY=Drag the laptop's id_ed25519.pub file into this window, then press Enter: "
+set "AUTOARGS=,'-TvLaptopKey','\"%KEY:"=%\"'"
+:autostart
+powershell -NoProfile -Command "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-NoExit','-File','\"%~dp0install-autostart.ps1\"'%AUTOARGS%"
+
+:done
 echo.
 echo Done. Double-click "Pub Karaoke" on the desktop to start. The staff PIN is in settings.json.
 pause
@@ -63,10 +80,12 @@ exit /b 0
 set "PY="
 for /f "delims=" %%p in ('py -3.12 -c "import sys; print(sys.executable)" 2^>nul') do set "PY=%%p"
 if not defined PY if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PY=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+if not defined PY if exist "%ProgramFiles%\Python312\python.exe" set "PY=%ProgramFiles%\Python312\python.exe"
 exit /b 0
 
 :fail
 echo.
 echo Setup stopped. Fix the problem above, then run setup.bat again.
+if /i "%~1"=="/pub" exit /b 1
 pause
 exit /b 1

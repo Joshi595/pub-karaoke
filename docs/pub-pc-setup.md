@@ -56,8 +56,10 @@ Printed internet QR codes are temporary: reprint after a tunnel change.
 
 ## Start automatically
 
-**Windows:** on the pub PC, sign in as its dedicated, non-administrator karaoke account. Open an elevated PowerShell
-for that same account and run `powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1`. This registers a
+**Windows:** on the pub PC, sign in as its dedicated karaoke account. Answer **Y** to *Start karaoke automatically*
+at the end of `setup.bat`, or open an elevated PowerShell for that same account and run
+`powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1`. The tasks are made for the account that approves
+the administrator prompt, so that account should be the karaoke account. This registers a
 server task at boot using S4U and a separate TV task at interactive login. No password is saved by this installer.
 The account needs access to this folder and permission to run scheduled tasks. S4U cannot use encrypted files or
 network-share credentials: keep the application and songs on a local, unencrypted-by-EFS drive.
@@ -77,31 +79,46 @@ the BIOS if supported. These hardware/account settings must be checked on the ac
 
 ## TV on a laptop at the TV
 
-When the pub PC is too far from the TV, it stays the server and song maker, and a Windows laptop at the TV shows the
-screen and plays the sound. The laptop reaches the PC's local TV port through an SSH link built into Windows, so the
-TV-only rules above still hold: the link is encrypted, opens only with the laptop's key, and can reach only the TV
-port (no passwords, no commands, no other ports). Nothing needs installing on the laptop.
+When the pub PC is too far from the TV, it stays the server and song maker (downloads, AI, catalogue, queue,
+backups), and a Windows laptop at the TV only shows the screen and plays the sound. Set up with two double-clicks:
 
-1. Both machines must be on the venue's **staff network** (Wi-Fi or cable), not the guest Wi-Fi, which usually keeps
-   devices apart. Give the pub PC a fixed address in the router (a DHCP reservation), and set its network to
-   **Private** in Windows (*Settings > Network*).
-2. On the laptop, in a terminal: `ssh-keygen -t ed25519 -N ""`. Copy `%USERPROFILE%\.ssh\id_ed25519.pub` (the
-   public half only) to the pub PC, for example on a USB stick.
-3. On the pub PC, set up the app as above. Then, in an elevated PowerShell in the app folder:
-   `powershell -ExecutionPolicy Bypass -File .\install-autostart.ps1 -TvLaptopKey D:\id_ed25519.pub`. This starts
-   the server at boot, opens no TV on the PC itself, switches on Windows' OpenSSH Server with passwords off and lets
-   only that key forward to the TV port, on private networks. It prints the `PUB_PC` value for the next step.
-4. Copy `tv-laptop.bat` to the laptop and set `PUB_PC` (and `TV_X`, `PORT` if needed) at its top. Run it: a
-   minimized window keeps the link up and the TV opens full-screen. To start it by itself, put a shortcut to it in
-   `shell:startup` (*Win+R*) and set the shortcut to run minimized.
-5. On the laptop: never sleep when plugged in, *When I close the lid: Do nothing*, sound output to the TV or
-   speakers, and a Windows password on its account. Run the sync test again: the laptop and TV have their own delay.
+1. **On the pub PC**, download [`Setup-Pub-PC.bat`](../Setup-Pub-PC.bat) from this repository (or from the latest
+   [release](https://github.com/Joshi595/pub-karaoke/releases/latest), which has the app inside it), double-click it
+   and approve the administrator prompt. It downloads the latest release package and checks its SHA-256, installs
+   the app, the song maker and its AI models (on an NVIDIA card if there is one, else the CPU), starts the server
+   at boot, allows guests and the TV laptop through the firewall on private networks, and puts
+   **`Connect-Karaoke-TV.bat`** on the desktop. At the end it shows the staff page address and PIN.
+2. **On the laptop**, connect HDMI to the TV and the audio cable to the mixer, join the staff network, copy
+   `Connect-Karaoke-TV.bat` over on a USB stick and double-click it. It pairs with the PC and opens karaoke
+   full-screen. With more than one screen it asks which is the TV, then opens *Sound* to pick and test the output.
 
-The link reconnects by itself within seconds after a network drop or a restart of either machine. A song already
-playing usually finishes from the browser's buffer. If the TV stays on a blank page, look at the minimized link
-window for the reason. If the pub PC was reinstalled, its SSH host key changed: run `ssh-keygen -R ADDRESS` on the
-laptop once. Print joining cards on the laptop at `http://localhost:5000/print` while the link is up. On a Linux
-pub PC, install `openssh-server`, set `PasswordAuthentication no`, and put the same restricted line
+After that the server starts when the PC is switched on, and the TV opens when someone signs in to the laptop.
+**Pub Karaoke TV** on the laptop's desktop opens it again.
+
+How it works and what it needs:
+
+- Both machines on the venue's **staff network**, not the guest Wi-Fi, which usually keeps devices apart. The PC's
+  network must be **Private** in Windows: the installer offers to switch it. A fixed address for the PC (a DHCP
+  reservation in the router) helps, but the laptop also finds the PC by name.
+- The link is SSH on port 5022, served by the karaoke app itself (`tv_link.py`), not by Windows: it has no Windows
+  login, no shell and no passwords. `Connect-Karaoke-TV.bat` carries the PC's address, its host key (the laptop
+  refuses any other machine) and a one-time ticket valid for 24 hours. The laptop makes its own key, which the
+  ticket pairs; from then on that key may only reach the PC's local TV port. Pairing another laptop replaces it.
+  Run `Setup-Pub-PC.bat` again for a new ticket; songs, settings and the pairing stay.
+- The laptop runs Edge with `?lite=1`: still backgrounds instead of animations. A launcher with no window keeps the
+  link up, reconnects within seconds, and reopens Edge if it is closed. A second copy doesn't start.
+- Only one TV screen runs the queue: another one (the PC's own browser, a second window) says so and waits. If the
+  laptop is gone for 15 seconds (rebooted), the singer on stage starts again from the top when it is back. A drop
+  while a song is loading keeps that singer on stage; a song already playing finishes from memory.
+- The staff page, under **System status**, says whether the TV laptop is connected.
+- On the laptop: never sleep when plugged in, *When I close the lid: Do nothing*, and a Windows password on its
+  account. Run the sync test again: the laptop and TV have their own delay. Print joining cards on the PC at
+  `http://localhost:5000/print`.
+
+Without the installers (or with a Linux pub PC), `install-autostart.ps1 -TvLaptopKey` and `tv-laptop.bat` link the
+laptop through Windows' own OpenSSH Server instead: make a key on the laptop with `ssh-keygen -t ed25519 -N ""`,
+give its `.pub` file to `setup.bat`'s autostart question (or to `-TvLaptopKey`), and set `PUB_PC` at the top of
+`tv-laptop.bat`. On Linux, put the same restricted line
 (`restrict,port-forwarding,permitopen="127.0.0.1:5000",command="exit" ssh-ed25519 …`) in the karaoke account's
 `~/.ssh/authorized_keys`.
 
@@ -111,7 +128,7 @@ pub PC, install `openssh-server`, set `PasswordAuthentication no`, and put the s
   singers and fairness counts, and requires a second tap. It is disabled while someone is singing.
 - At **6 am Europe/Berlin**, session state rolls over automatically on the next API request. If a song is playing,
   rollover waits until it finishes. Venue settings, the library and popularity history remain.
-- **System status** shows the internet/local addresses, free disk space, song-maker availability, last worker
+- **System status** shows whether the TV is connected, the internet/local addresses, free disk space, song-maker availability, last worker
   failure and last successful backup. The server restarts after a crash or repeated failed health checks.
 - Supervisor/server output rotates in `logs/supervisor.log` (up to four 2 MB files). Worker diagnostics are in
   `work/maker.log`. Both logs can contain song titles and singer names; treat backups and logs as private.
@@ -162,6 +179,9 @@ sound-device quality, YouTube availability at this venue or AI throughput on a d
    Check that an old completion request never skips the next singer.
 8. Test unavailable YouTube playback, a backup/restore on a spare copy, and a simulated next-day rollover outside
    an active event. Keep the laptop fallback until this rehearsal passes.
+9. With a TV laptop, on two clean Windows PCs: follow only the two steps under *TV on a laptop at the TV*. Play a
+   complete song through the mixer while the PC makes another. Unplug the laptop's network while a song loads, and
+   reboot the laptop mid-song: the singer must keep their turn both times.
 
 Run automated tests with `python -m pytest -q --ignore=test_browser.py`. For browser checks install
 `requirements-test.txt`, run `python -m playwright install chromium`, then `python -m pytest -q test_browser.py`.

@@ -1,0 +1,28 @@
+name: Release
+
+# A version tag (v1.2.0) publishes the Windows package that Setup-Pub-PC.bat downloads and checks, and a
+# Setup-Pub-PC.bat with that package inside it (no download needed).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python windows/package.py
+      - run: gh release create "$GITHUB_REF_NAME" dist/pub-karaoke-windows.zip dist/Setup-Pub-PC.bat --generate-notes --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

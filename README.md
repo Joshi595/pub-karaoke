@@ -3,7 +3,7 @@
 **Dedicated pub PC:** [Laptop-free setup, automatic startup, backups and rehearsal](docs/pub-pc-setup.md).
 The TV and music stay local; phones can connect through the free internet link. Hosting needs no subscription,
 but the free tunnel has a changing address and no uptime guarantee. Hardware, power and internet are separate.
-PC too far from the TV? [A laptop at the TV can show the screen and play the sound](docs/pub-pc-setup.md#tv-on-a-laptop-at-the-tv).
+PC too far from the TV? A laptop at the TV shows the screen and plays the sound: [two double-clicks, `Setup-Pub-PC.bat` on the PC and the file it makes on the laptop](docs/pub-pc-setup.md#tv-on-a-laptop-at-the-tv).
 
 [![Tests](https://github.com/Joshi595/pub-karaoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Joshi595/pub-karaoke/actions/workflows/tests.yml)
 [![Security](https://github.com/Joshi595/pub-karaoke/actions/workflows/security.yml/badge.svg)](https://github.com/Joshi595/pub-karaoke/actions/workflows/security.yml)
@@ -65,7 +65,7 @@ There are two parts:
 
 **Windows:**
 1. [Download the code](https://github.com/Joshi595/pub-karaoke/archive/refs/heads/main.zip) and unzip it, or `git clone https://github.com/Joshi595/pub-karaoke.git`.
-2. Double-click **`setup.bat`**. It installs anything missing with `winget`: Python 3.12, ffmpeg, Node.js and cloudflared. It then sets up the app, asks whether to install the song maker, and puts a **Pub Karaoke** icon on the desktop.
+2. Double-click **`setup.bat`**. It installs anything missing with `winget`: Python 3.12, ffmpeg, Node.js and cloudflared. It then sets up the app, asks whether to install the song maker, puts a **Pub Karaoke** icon on the desktop, and asks whether karaoke should start by itself when the PC is switched on. Git is not needed. If Windows says it "protected your PC", choose **More info > Run anyway**.
 3. Double-click **Pub Karaoke** on the desktop. The TV shows the welcome screen with the QR code.
 
 **macOS and Linux:**

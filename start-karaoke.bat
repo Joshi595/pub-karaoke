@@ -9,4 +9,5 @@ if not exist .venv\Scripts\python.exe (echo Run setup.bat first. & pause & exit 
 if errorlevel 1 start "Pub Karaoke server - keep this open" /min .venv\Scripts\python.exe run_karaoke.py
 .venv\Scripts\python.exe run_karaoke.py --wait
 if errorlevel 1 (pause & exit /b 1)
+if exist ".pub-tv\host_key" (echo Pub PC ready. The TV player runs on the laptop. & exit /b 0)
 start "Pub Karaoke TV - keep this open" /min .venv\Scripts\python.exe run_karaoke.py --kiosk

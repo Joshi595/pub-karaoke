@@ -102,12 +102,14 @@ Object.assign(T.en, { eventTitle: "Tonight's event", newEvent: "Start a fresh ni
   closeRequests: "Close requests", openRequests: "Reopen requests", requestOpen: "Requests open", requestClosed: "Requests closed",
   healthTitle: "System status", failedAction: "The change did not complete. Check the connection and try again.",
   storageFull: "Storage is full. Free some disk space before preparing more songs.", backupProblem: "Backup needs attention", backupOk: "Last backup",
-  noBackup: "No successful backup yet", online: "Internet link connected", localOnly: "Local access only — internet link unavailable", workerUnavailable: "Song maker is not installed" });
+  noBackup: "No successful backup yet", online: "Internet link connected", localOnly: "Local access only — internet link unavailable", workerUnavailable: "Song maker is not installed",
+  tvOn: "TV screen connected", tvOnLaptop: "TV laptop connected", tvOff: "TV screen not connected", tvOffLaptop: "TV laptop not connected: is it on, and on the staff network?", tvSince: "last seen" });
 Object.assign(T.de, { eventTitle: "Heutiger Abend", newEvent: "Neuen Abend starten", newEventSure: "Nochmal tippen: Warteschlange löschen",
   closeRequests: "Songwünsche schließen", openRequests: "Songwünsche wieder öffnen", requestOpen: "Songwünsche offen", requestClosed: "Songwünsche geschlossen",
   healthTitle: "Systemstatus", failedAction: "Die Änderung wurde nicht abgeschlossen. Verbindung prüfen und erneut versuchen.",
   storageFull: "Speicher voll. Vor weiteren Songs bitte Speicherplatz freigeben.", backupProblem: "Sicherung benötigt Aufmerksamkeit", backupOk: "Letzte Sicherung",
-  noBackup: "Noch keine erfolgreiche Sicherung", online: "Internetverbindung aktiv", localOnly: "Nur lokaler Zugriff — Internetlink nicht verfügbar", workerUnavailable: "Song-Macher ist nicht installiert" });
+  noBackup: "Noch keine erfolgreiche Sicherung", online: "Internetverbindung aktiv", localOnly: "Nur lokaler Zugriff — Internetlink nicht verfügbar", workerUnavailable: "Song-Macher ist nicht installiert",
+  tvOn: "Fernseh-Bildschirm verbunden", tvOnLaptop: "TV-Laptop verbunden", tvOff: "Fernseh-Bildschirm nicht verbunden", tvOffLaptop: "TV-Laptop nicht verbunden: ist er an und im Personal-Netz?", tvSince: "zuletzt gesehen" });
 
 const $ = id => document.getElementById(id);
 const store = (k, v) => { try { return v === undefined ? sessionStorage.getItem(k) : sessionStorage.setItem(k, v); } catch { return null; } };
@@ -324,6 +326,9 @@ async function loadHealth() {
     if (r.status === 403) return lockUp();
     if (!r.ok) throw new Error("health");
     const h = await r.json();
+    const laptopTv = h.tv.mode === "laptop", when = s => new Intl.DateTimeFormat(lang, { timeStyle: "short" }).format(new Date(s * 1000));
+    $("tvStatus").textContent = h.tv.connected ? (laptopTv ? t().tvOnLaptop : t().tvOn)
+      : `${laptopTv ? t().tvOffLaptop : t().tvOff}${h.tv.seen ? ` (${t().tvSince} ${when(h.tv.seen)})` : ""}`;
     $("networkStatus").textContent = `${h.connection.internet ? t().online : t().localOnly}. ${h.connection.lan_url}`;
     $("diskStatus").textContent = h.storage.blocked ? t().storageFull : `${h.storage.library_gb} GB / ${h.storage.free_gb} GB free`;
     $("workerStatus").textContent = !h.worker.available ? t().workerUnavailable : h.worker.job.wish

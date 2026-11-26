@@ -23,5 +23,8 @@ __pycache__/
 .pytest_cache/
 .playwright-mcp/
 .tv-profile/
+.pub-tv/
+Connect-Karaoke-TV.bat
+dist/
 .superpowers/
 docs/superpowers/

@@ -417,7 +417,7 @@ def normalize(src, dst_wav):
                     "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "44100", "-ac", "2", str(dst_wav)], check=True)
 
 
-def separate(wav, outdir, overlap=8):
+def load_separator(outdir, overlap):
     import torch
     from audio_separator.separator import Separator
     if _separator[0] is None:
@@ -426,7 +426,11 @@ def separate(wav, outdir, overlap=8):
         _separator[0] = Separator(output_dir=str(outdir), output_format="m4a", use_autocast=torch.cuda.is_available(), mdxc_params={
             "segment_size": 256, "override_model_segment_size": False, "batch_size": None, "overlap": overlap, "pitch_shift": 0})
         _separator[0].load_model()
-    sep = _separator[0]
+    return _separator[0]
+
+
+def separate(wav, outdir, overlap=8):
+    sep = load_separator(outdir, overlap)
     sep.output_dir = str(outdir)
     sep.model_instance.output_dir = str(outdir)
     sep.separate(str(wav), {"Vocals": "vocals", "Instrumental": "instrumental"})
@@ -775,6 +779,7 @@ def run_main(argv=None):
     ap.add_argument("--limit", type=int, default=0, help="stop after N new songs")
     ap.add_argument("--only", help='make just this "Artist - Title"')
     ap.add_argument("--model", help="stable-ts model (default: medium on GPU, base on CPU)")
+    ap.add_argument("--prepare-models", action="store_true", help="download and check the timing and separation models")
     ap.add_argument("--overlap", type=int, default=8, help="vocal separation passes: 8 = best quality, 2 = faster")
     ap.add_argument("--list", help="make the songs in this file instead of starter-songs.txt and wishes.txt, e.g. top-songs.txt")
     ap.add_argument("--retime", nargs="*", metavar="SLUG", help="time the words of made songs again (all songs if no slug given)")
@@ -790,6 +795,10 @@ def run_main(argv=None):
         return stable_whisper.load_model(args.model or ("medium" if torch.cuda.is_available() else "base"), device="cpu")
 
     library, work = ROOT / "library", ROOT / "work"
+    if args.prepare_models:
+        load_model()
+        load_separator(work, args.overlap)
+        return
     if args.retime is not None:
         return retime(args.retime or sorted(p.parent.name for p in library.glob("*/song.json")), library, load_model())
     if args.remake:

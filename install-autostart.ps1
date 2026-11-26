@@ -2,7 +2,8 @@
 # Server starts at boot under that account with S4U (no saved password); TV starts at interactive login.
 # -TvLaptopKey path\to\id_ed25519.pub: the TV is on a laptop at the TV instead (tv-laptop.bat). No TV here; that
 # laptop's key may open an SSH link to the local TV port only: no passwords, no commands, no other ports.
-param([string]$TvLaptopKey)
+# -LaptopTv: the TV is a laptop paired by windows\pub-pc.ps1 (Setup-Pub-PC.bat). No TV here, nothing else to set up.
+param([string]$TvLaptopKey, [switch]$LaptopTv)
 $ErrorActionPreference = 'Stop'
 $taskRoot = $PSScriptRoot
 $taskPython = Join-Path $taskRoot '.venv\Scripts\python.exe'
@@ -12,11 +13,16 @@ $taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 9
 $serverAction = New-ScheduledTaskAction -Execute $taskPython -Argument ('"' + (Join-Path $taskRoot 'run_karaoke.py') + '"') -WorkingDirectory $taskRoot
 $serverPrincipal = New-ScheduledTaskPrincipal -UserId $taskUser -LogonType S4U -RunLevel Limited
 Register-ScheduledTask -TaskName 'Pub Karaoke server' -Action $serverAction -Trigger (New-ScheduledTaskTrigger -AtStartup) -Principal $serverPrincipal -Settings $taskSettings -Force | Out-Null
-if (-not $TvLaptopKey) {
+if (-not $TvLaptopKey -and -not $LaptopTv) {
     $tvAction = New-ScheduledTaskAction -Execute $taskPython -Argument ('"' + (Join-Path $taskRoot 'run_karaoke.py') + '" --kiosk') -WorkingDirectory $taskRoot
     $tvPrincipal = New-ScheduledTaskPrincipal -UserId $taskUser -LogonType Interactive -RunLevel Limited
     Register-ScheduledTask -TaskName 'Pub Karaoke TV' -Action $tvAction -Trigger (New-ScheduledTaskTrigger -AtLogOn -User $taskUser) -Principal $tvPrincipal -Settings $taskSettings -Force | Out-Null
     Write-Output 'Installed. Server starts at boot; TV starts when this account signs in. Reboot to test.'
+    return
+}
+if ($LaptopTv) {
+    Unregister-ScheduledTask -TaskName 'Pub Karaoke TV' -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Output 'Installed. Server starts at boot; the TV runs on the paired laptop.'
     return
 }
 

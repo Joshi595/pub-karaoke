@@ -26,6 +26,7 @@ function sketchTheme(cls, width, height, build, colours) {
     start(el, ctl) {
       if (colours && !ctl.banner) Object.entries(colours(ctl)).forEach(([k, v]) => document.body.style.setProperty(k, v));
       const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+      const still = () => reduced.matches || new URLSearchParams(location.search).has("lite");  // /tv?lite=1: a slow laptop draws one frame
       const inst = new p5(p => {
         const seed = seedOf(ctl.seed);
         const draw = build(p, ctl);
@@ -35,13 +36,13 @@ function sketchTheme(cls, width, height, build, colours) {
           p.frameRate(ctl.banner ? 20 : 30);
           p.randomSeed(seed); p.noiseSeed(seed);
           if (draw.setup) draw.setup();
-          if (reduced.matches) p.noLoop();
+          if (still()) p.noLoop();
         };
         p.draw = () => draw.frame(ctl.beat());
       }, el);
-      const change = () => { if (reduced.matches) { inst.redraw(); inst.noLoop(); } else inst.loop(); };
+      const change = () => { if (still()) { inst.redraw(); inst.noLoop(); } else inst.loop(); };
       reduced.addEventListener("change", change);
-      return { stop() { reduced.removeEventListener("change", change); inst.remove(); }, pause(on) { on || reduced.matches ? inst.noLoop() : inst.loop(); } };
+      return { stop() { reduced.removeEventListener("change", change); inst.remove(); }, pause(on) { on || still() ? inst.noLoop() : inst.loop(); } };
     },
   };
 }

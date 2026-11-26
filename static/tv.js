@@ -2,9 +2,11 @@
 // The server owns the queue; this page follows /api/state and plays whatever /api/next hands it.
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// This screen, to the server: only one TV runs the queue (a second window waits until this one has gone)
+const PLAYER = Math.random().toString(36).slice(2) + Date.now().toString(36);
 async function post(url, body) {
   const r = await fetch(url, { method: "POST", signal: AbortSignal.timeout(10000),
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+    headers: { "Content-Type": "application/json", "X-Player": PLAYER }, body: JSON.stringify(body || {}) });
   const data = await r.json();
   if (!r.ok && r.status !== 403) throw new Error(data.error || `HTTP ${r.status}`);
   return data;
@@ -32,7 +34,7 @@ async function loadSong(slug) {
   const audio = async name => ctx.decodeAudioData(await (await get(name)).arrayBuffer());
   const [inst, voc, lyrics, song] = await timed(Promise.all([
     audio("instrumental.m4a"), audio("vocals.m4a"), get("lyrics.json").then(r => r.json()), get("song.json").then(r => r.json()),
-  ]), 35000, "Song loading timed out");
+  ]), 35000, "Song loading timed out");  // the message marks it as a connection problem: see `offline`
   return { inst, voc, lyrics, song };
 }
 
@@ -322,7 +324,7 @@ async function poll() {
   polling = true;
   const asked = performance.now();
   try {
-  const response = await fetch("/api/state", { signal: AbortSignal.timeout(5000) });
+  const response = await fetch("/api/state", { headers: { "X-Player": PLAYER }, signal: AbortSignal.timeout(5000) });
   if (!response.ok) throw new Error("State unavailable");
   state = await response.json();
   $("connection").hidden = true;
@@ -359,6 +361,9 @@ async function next() {
     if (error === "forbidden") {  // only the laptop itself may run the queue, so a guest's phone can't
       $("start").innerText = `Open the TV screen on the karaoke laptop as http://localhost:${location.port || 80}/tv\nDen Fernseh-Bildschirm auf dem Karaoke-Laptop als http://localhost:${location.port || 80}/tv öffnen`;
       $("start").hidden = false;
+    } else if (error === "other_player") {  // e.g. this is the PC's browser while the laptop at the TV is playing
+      $("start").innerText = "Another TV screen is playing the karaoke. Close this one.\nEin anderer Fernseh-Bildschirm spielt das Karaoke. Diesen hier schließen.";
+      $("start").hidden = false;
     } else if (unlocked) $("start").hidden = true;  // allowed again (e.g. the server was updated): clear the message
     if (entry) perform(entry); else { current = null; show("lobby"); }
   } catch (e) { show("lobby"); }
@@ -389,6 +394,7 @@ async function finish(entry, alive, error = "") {
   while (alive()) {
     try {
       const result = await post("/api/done", { id: entry.id, ...(error ? { error } : {}) });
+      if (result.error === "other_player") return;  // another screen has the queue now: it plays this singer
       if (result.error) throw new Error(result.error);
       return;
     } catch {
@@ -410,9 +416,14 @@ async function performSong(entry) {
   $("upSong").textContent = [entry.title, entry.artist].filter(Boolean).join(" – ");
   renderBar();
   show("upnext");
-  let loadError = "";
+  let loadError = "", offline = false;
   // no song_id: a guest's wish that isn't made yet, played as a YouTube karaoke video instead
-  const loading = entry.song_id ? loadSong(entry.song_id).catch(e => { console.error(e); loadError = String(e); return null; }) : null;
+  // A song that answers 404 or won't decode is broken; one that couldn't be fetched at all is the link to the PC.
+  const loading = entry.song_id ? loadSong(entry.song_id).catch(e => {
+    console.error(e); loadError = String(e);
+    offline = ["TypeError", "AbortError", "TimeoutError"].includes(e.name) || e.message === "Song loading timed out";
+    return null;
+  }) : null;
   for (let s = state ? state.upnext_seconds : 15; s > 0; s--) {
     $("upCount").textContent = s;
     await sleep(1000);
@@ -423,6 +434,9 @@ async function performSong(entry) {
   if (!alive()) return;
   if (!loading) loadError = await playVideo(entry.yt || []);
   if (!alive()) return;
+  if (offline) {  // the same singer goes again once the link is back: the server still has them on stage
+    current = null; show("lobby"); return;
+  }
   if (loadError) {  // a broken song folder or video must not block the night: drop it and move on
     await finish(entry, alive, loadError);
     if (!alive()) return;

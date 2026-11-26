@@ -463,6 +463,31 @@ def test_tv_endpoints_only_from_the_laptop(client):
     assert client.get("/api/state").json["now_playing"]["id"] == e["id"]
 
 
+def test_a_second_tv_screen_cannot_take_the_queue_over(client, monkeypatch):
+    import time
+    client.post("/api/queue", json={"name": "Anna", "device": "d1", "song_id": "a-b"})
+    laptop, pc = {"X-Player": "laptop"}, {"X-Player": "pc"}
+    e = client.post("/api/next", json={}, headers=laptop).json["entry"]
+    r = client.post("/api/next", json={}, headers=pc)
+    assert r.status_code == 403 and r.json["error"] == "other_player"
+    assert client.get("/api/admin/health", headers={"X-Pin": "9999"}).json["tv"]["connected"] is True
+    later = time.time() + 16  # the laptop rebooted: gone 15 s, then the other screen plays the same singer
+    monkeypatch.setattr(time, "time", lambda: later)
+    assert client.get("/api/admin/health", headers={"X-Pin": "9999"}).json["tv"]["connected"] is False
+    assert client.post("/api/next", json={}, headers=pc).json["entry"]["id"] == e["id"]
+    assert client.post("/api/done", json={"id": e["id"]}, headers=laptop).json["error"] == "other_player"
+
+
+def test_failed_backup_leaves_no_half_zip(tmp_path, monkeypatch):
+    import zipfile
+    from operations import backup
+    (tmp_path / "settings.json").write_text("{}")
+    monkeypatch.setattr(zipfile.ZipFile, "write", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError):
+        backup(tmp_path)
+    assert list((tmp_path / "backups").iterdir()) == []
+
+
 def test_tv_opened_at_the_laptops_own_network_address_works(client, monkeypatch):
     import app
     monkeypatch.setattr(app, "lan_ip", lambda: "192.168.178.40")    # the address printed under the QR code on the TV

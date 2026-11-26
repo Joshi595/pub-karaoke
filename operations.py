@@ -92,11 +92,15 @@ def backup(root, include_library=False, keep=7):
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f") + "-" + uuid.uuid4().hex[:8]
     target = dest / (stamp + ".zip")
     tmp = target.with_suffix(".tmp")
-    with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as z:
-        for p in [*(root / n for n in METADATA), *root.glob("logo-*.*")]:
-            if p.is_file() and not p.is_symlink():
-                z.write(p, p.name)
-    tmp.replace(target)
+    try:
+        with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED) as z:
+            for p in [*(root / n for n in METADATA), *root.glob("logo-*.*")]:
+                if p.is_file() and not p.is_symlink():
+                    z.write(p, p.name)
+        tmp.replace(target)
+    except BaseException:
+        tmp.unlink(missing_ok=True)  # a disk-full half zip neither stays behind nor counts as a snapshot
+        raise
     if include_library:
         backup_library(root)
     for old in sorted(dest.glob("*.zip"))[:-keep]:

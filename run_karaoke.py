@@ -1,5 +1,6 @@
 """Supervised local server. No cloud server or paid domain is required."""
 import argparse
+from contextlib import nullcontext
 import atexit
 import json
 import logging
@@ -61,7 +62,12 @@ def serve(root):
         application.config["start_tunnel"]()
         application.config["start_maintenance"]()
         print(f"TV: http://localhost:{local_port}/tv; guest interface: port {guest_port}", flush=True)
-        servers[0].run()
+        link = nullcontext()
+        if (root / ".pub-tv" / "host_key").is_file():
+            from tv_link import running_link
+            link = running_link(root, local_port)
+        with link:
+            servers[0].run()
     except KeyboardInterrupt:
         pass
     finally:

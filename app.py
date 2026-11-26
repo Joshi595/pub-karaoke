@@ -555,11 +555,14 @@ def create_app(root):
         except OSError:
             return  # a concurrent atomic replacement will be picked up on the next poll
         if force or found != seen[0]:
-            seen[0] = found
+            # the disk is read outside the queue lock: a slow disk must not hold up the TV and the guests' phones
             fresh = load_songs(library)
-            songs.clear()
-            songs.update(fresh)
-            catalog.set_library(songs, {slug: lyric_lines(library / slug) for slug in songs})
+            lines = {slug: lyric_lines(library / slug) for slug in fresh}
+            with lock:
+                seen[0] = found
+                songs.clear()
+                songs.update(fresh)
+                catalog.set_library(songs, lines)
 
     refresh_library()
     filters = lambda: {"hide_explicit": settings["hide_explicit"], "langs": settings["languages"] or None}
@@ -720,11 +723,11 @@ def create_app(root):
         except OSError as err:  # the maker process died between songs
             slug, why = None, f"error {err}"
         wish = job["wish"]
+        refresh_library(force=True)
         with lock:
             interrupted = making.get("interrupted")
             elapsed = round(time.time() - making.get("started", time.time()), 1)
             making.clear()
-            refresh_library(force=True)
             if interrupted:
                 return print(f"Paused {wish!r}: a guest's song goes first", flush=True)
             if job.get("retime"):
@@ -935,9 +938,24 @@ def create_app(root):
                 raise QueueError("bad_recovery")
         return jsonify(token=token, recovery_code=token)
 
+    # "laptop": the TV is a laptop at the TV, linked to this PC (tv_link.py). Its launcher checks this before showing it.
+    player_mode = lambda: "laptop" if (root / ".pub-tv" / "host_key").is_file() else "local"
+
     @app.get("/api/health")
     def health():
-        return jsonify(ok=True)
+        return jsonify(ok=True, player_mode=player_mode())
+
+    player = {"id": None, "seen": 0.0}  # the one TV screen that runs the queue
+
+    def tv_player():
+        """A second TV screen (the PC's own browser, a second window) must not take the queue over. It may once the
+        first has been gone 15 s: closed, or the laptop rebooted. Then the singer on stage starts again there."""
+        pid, now = request.headers.get("X-Player", "")[:64], time.time()
+        with lock:
+            if player["id"] != pid and now - player["seen"] < 15:
+                return False
+            player.update(id=pid, seen=now)
+            return True
 
     def admin(fn):
         @wraps(fn)
@@ -985,6 +1003,8 @@ def create_app(root):
             # laptop can skip singers; and the TV is opened by address, never by a website's name
             if public_request() or not from_laptop(request.remote_addr) or not request.is_json or not local_host(request.host):
                 return jsonify(error="forbidden"), 403
+            if not tv_player():
+                return jsonify(error="other_player"), 403
             return fn(*a, **kw)
         return wrapped
 
@@ -1009,8 +1029,8 @@ def create_app(root):
     @app.get("/api/search")
     def api_search():
         q = request.args.get("q", "")[:80]
+        refresh_library()
         with lock:
-            refresh_library()
             return jsonify(songs=[mark(v) for v in catalog.search(q, **filters())], artists=catalog.artists(q))
 
     @app.get("/api/browse")
@@ -1018,8 +1038,8 @@ def create_app(root):
         """A shelf of songs to scroll (?shelf=top&page=0), or every song by one artist (?artist=Queen)."""
         page = request.args.get("page", "0")
         page = int(page) if page.isdigit() and len(page) <= 6 else 0
+        refresh_library()
         with lock:
-            refresh_library()
             artist = request.args.get("artist")
             rows = (catalog.by_artist(artist, **filters()) if artist else
                     catalog.shelf(request.args.get("shelf", "top"), page=page, popular=popular(), **filters()))
@@ -1042,6 +1062,8 @@ def create_app(root):
     @app.get("/api/state")
     def api_state():
         device = guest_device() or (None if public_request() else request.args.get("device"))
+        if "X-Player" in request.headers and not public_request() and from_laptop(request.remote_addr):
+            tv_player()  # the TV's heartbeat: it keeps the queue while it's showing
         with lock:
             return jsonify(queue=[view(e, device) for e in party.upcoming()], now_playing=playing(device),
                            paused=party.paused, volume=party.volume, help_vocals=party.help_vocals,
@@ -1066,8 +1088,8 @@ def create_app(root):
                     raise QueueError("unknown_song")
                 return jsonify(view(party.add(name, device, b.get("song_id")), device))
         clean_name(name)
+        refresh_library()
         with lock:
-            refresh_library()
             row = catalog.get(str(cid))
             if not row or not allowed_song(cid=cid):
                 raise QueueError("unknown_song")
@@ -1195,6 +1217,7 @@ def create_app(root):
                        "timeout_seconds": settings["maker_timeout_seconds"], **worker_status},
                        connection={"internet": bool(tunnel[0] or settings["public_url"]), "join_url": join_url(),
                                    "lan_url": f"http://{lan_ip()}:{settings['guest_port']}/"},
+                       tv={"mode": player_mode(), "seen": player["seen"] or None, "connected": time.time() - player["seen"] < 15},
                        backup=maintenance_status)
 
     @app.post("/api/admin/skip")
@@ -1403,14 +1426,20 @@ def create_app(root):
     maintenance_status = {"last_success": read_json(backup_marker, {}).get("at"), "error": ""}
 
     def maintain():
+        snapped = False
         while not stopping.is_set():
             try:
                 latest = maintenance_status["last_success"] or 0
                 if time.time() - latest >= 86400:
                     # Snapshot metadata under the same lock as mutations. Large immutable audio copies run outside it.
-                    with lock:
-                        backup(root)
+                    # A failed song copy is retried every 5 minutes without a new snapshot each time: seven of those
+                    # would push the last seven days' snapshots out of the history.
+                    if not snapped:
+                        with lock:
+                            backup(root)
+                        snapped = True
                     backup_library(root)
+                    snapped = False
                     maintenance_status.update(last_success=time.time(), error="")
                     write_json(backup_marker, {"at": maintenance_status["last_success"]})
             except (OSError, ValueError) as err:

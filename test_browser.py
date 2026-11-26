@@ -82,6 +82,23 @@ def test_tv_recovers_from_lost_completion(browser, stage, lost_after_delivery):
     finally: p.close()
 
 
+def test_link_down_while_loading_keeps_the_singer(browser, stage):
+    web, local, _ = stage
+    p = browser.new_page(reduced_motion="reduce")
+    web.test_client().post("/api/queue", json={"name": "First", "song_id": "test-track"})
+    aborted = []
+    def library(route):  # the laptop's link to the PC drops just as the song loads
+        if len(aborted) < 2:
+            aborted.append(True); route.abort()
+        else: route.continue_()
+    p.route("**/library/**", library)
+    try:
+        p.goto(local + "/tv")
+        wait_js(p, "document.querySelector('#clapWho').textContent === 'First'")
+        assert aborted and web.config["party"].turns == {"first": 1}  # sung once it was back, not dropped
+    finally: p.close()
+
+
 def test_guest_recovery_on_a_new_browser(browser, stage):
     web, _, public = stage
     first = browser.new_context(viewport={"width": 390, "height": 844}, reduced_motion="reduce")

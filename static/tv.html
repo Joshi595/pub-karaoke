@@ -30,7 +30,7 @@
     </div>
   </div>
   <div class="lineup shade">
-    <h2 data-say="tvNextUp">Next up / Als Nächstes</h2>
+    <h2 data-say="tvNextUp" data-join="br">Next up<br>Als Nächstes</h2>
     <ol id="lineup"></ol>
     <p class="prep" id="prep" hidden></p>
     <p class="free" id="free" data-say="tvFree" data-join="br">The stage is free. Scan the code and pick a song!<br>Die Bühne ist frei. Code scannen und Song aussuchen!</p>
@@ -70,6 +70,12 @@
 <section class="scene shade" id="applause" hidden>
   <p data-say="tvApplause">Applause for / Applaus für</p>
   <p class="who" id="clapWho"></p>
+</section>
+
+<section class="scene shade" id="oops" hidden>
+  <p class="who" id="oopsWho"></p>
+  <p>That song wouldn't play. Pick another one!</p>
+  <p>Der Song lässt sich nicht abspielen. Such dir einen anderen aus!</p>
 </section>
 
 <section class="scene shade" id="recovering" hidden>

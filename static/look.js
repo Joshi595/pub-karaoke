@@ -3,18 +3,20 @@
 // On a special night (look.night) that night's look shows instead, in its own colours: the pub's accent would clash.
 function applyVenueLook(look) {
   if (!look) return;
+  const key = JSON.stringify(look);
+  if (applyVenueLook.key === key) return;  // every poll brings the same look: nothing to redo
+  applyVenueLook.key = key;
   const root = document.documentElement, night = look.night !== look.look && look.night;
   root.dataset.look = night || look.look;
   root.toggleAttribute("data-logo", !!look.logo);  // looks.css shows img.logo only then
   document.querySelectorAll("img.logo").forEach(img => { if (look.logo && img.getAttribute("src") !== look.logo) img.src = look.logo; });
-  if (look.accent && !night) {
-    const [r, g, b] = [1, 3, 5].map(i => parseInt(look.accent.slice(i, i + 2), 16) / 255)
-      .map(c => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-    root.style.setProperty("--accent", look.accent);  // and text on it that stays readable, whatever the colour
-    root.style.setProperty("--on-accent", 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.18 ? "#111111" : "#FFFFFF");
-  } else {
-    root.style.removeProperty("--accent");
-    root.style.removeProperty("--on-accent");
+  root.style.removeProperty("--accent");
+  root.style.removeProperty("--on-accent");
+  // the staff's own colour, if it reads on this look's background (it is also text: links, "Show more"), with text
+  // on it that stays readable, whatever the colour
+  if (look.accent && !night && contrast(look.accent, getComputedStyle(root).getPropertyValue("--bg").trim()) >= 3) {
+    root.style.setProperty("--accent", look.accent);
+    root.style.setProperty("--on-accent", contrast(look.accent, "#111111") >= contrast(look.accent, "#FFFFFF") ? "#111111" : "#FFFFFF");
   }
   let icon = document.querySelector("link[rel=icon]");
   if (!icon) { icon = document.createElement("link"); icon.rel = "icon"; document.head.append(icon); }
@@ -24,6 +26,30 @@ function applyVenueLook(look) {
   if (theme) theme.content = getComputedStyle(root).getPropertyValue("--bg").trim();
   try { localStorage.setItem("look", JSON.stringify(look)); } catch (e) {}
 }
+// ---------------------------------------------------------------- shared by every page
+
+// WCAG contrast of two #rrggbb colours, from 1 (none) to 21.
+function contrast(a, b) {
+  const lum = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(c => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+// A request timeout that also works on older iPhones (AbortSignal.timeout came with iOS 16): there, none.
+const timeout = ms => AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined;
+// Two taps for anything that can't be undone: the first arms the button and says what the second one does.
+function confirmTap(button, sureText, action) {
+  if (button.dataset.armed) { delete button.dataset.armed; button.classList.remove("armed"); return action(); }
+  button.dataset.armed = "1"; button.classList.add("armed"); const label = button.textContent; button.textContent = sureText;
+  setTimeout(() => { if (button.dataset.armed) { delete button.dataset.armed; button.classList.remove("armed"); button.textContent = label; } }, 3000);
+}
+// The guest Wi-Fi as a QR code that phones join by scanning (TV and table cards). An open network has no password type.
+function wifiCode(w) {
+  const esc = s => s.replace(/([\\;,:"])/g, "\\$1");
+  return w.password ? `WIFI:T:WPA;S:${esc(w.name)};P:${esc(w.password)};;` : `WIFI:T:nopass;S:${esc(w.name)};;`;
+}
+
 try { applyVenueLook(JSON.parse(localStorage.getItem("look"))); } catch (e) {}
 
 // The TV scenes (themes.js) that go with each look, when staff want tonight's theme everywhere: the TV shows another

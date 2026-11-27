@@ -32,3 +32,4 @@ th { width: 25%; }
 .pin span { display: inline-block; width: 40mm; border-bottom: 1px solid var(--ink); }
 .noprint { text-align: center; padding: 12px; font-size: 14px; }
 .noprint button { font: inherit; padding: 8px 18px; }
+.failed { background: #FDE2DC; color: #5A1208; font-weight: 700; }

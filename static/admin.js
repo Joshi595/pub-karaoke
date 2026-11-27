@@ -112,6 +112,11 @@ Object.assign(T.de, { eventTitle: "Heutiger Abend", newEvent: "Neuen Abend start
   tvOn: "Fernseh-Bildschirm verbunden", tvOnLaptop: "TV-Laptop verbunden", tvOff: "Fernseh-Bildschirm nicht verbunden", tvOffLaptop: "TV-Laptop nicht verbunden: ist er an und im Personal-Netz?", tvSince: "zuletzt gesehen" });
 
 const $ = id => document.getElementById(id);
+Object.assign(T.en, { saved: "Saved.", gbFree: (used, free) => `${used} GB used, ${free} GB free`,
+  accentHard: "That colour is hard to see on this look, so the look's own colour stays. Pick a lighter or brighter one." });
+Object.assign(T.de, { saved: "Gespeichert.", gbFree: (used, free) => `${used} GB belegt, ${free} GB frei`,
+  accentHard: "Diese Farbe ist auf diesem Look schwer zu sehen, daher bleibt die Farbe des Looks. Wähl eine hellere oder kräftigere." });
+
 const store = (k, v) => { try { return v === undefined ? sessionStorage.getItem(k) : sessionStorage.setItem(k, v); } catch { return null; } };
 const local = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
 let lang = local("lang") || ((navigator.language || "").startsWith("de") ? "de" : "en");
@@ -119,12 +124,15 @@ let staff = store("staff") || "", state = null, dragging = { help: false, vol: f
 const t = () => voiced(T[lang], lang);  // the title in tonight's voice, when the theme is everywhere (look.js)
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
-function toast(msg) { const b = $("toast"); b.textContent = msg; b.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => b.classList.remove("show"), 3000); }
+function toast(msg, ok) {
+  const b = $("toast"); b.textContent = msg; b.classList.toggle("ok", !!ok); b.classList.add("show");
+  clearTimeout(toast.h); toast.h = setTimeout(() => b.classList.remove("show"), ok ? 2500 : 6000);
+}
 async function admin(path, body, method = "POST") {
   try {
   const file = body instanceof Blob;  // the logo goes as it is; everything else as JSON
   const r = await fetch(`/api/admin/${path}`, { method, headers: { "Content-Type": file ? body.type : "application/json", "X-Staff": staff },
-                                                 signal: AbortSignal.timeout(15000), body: file ? body : JSON.stringify(body || {}) });
+                                                 signal: timeout(15000), body: file ? body : JSON.stringify(body || {}) });
   if (r.status === 403) { lockUp(); throw "pin"; }
   if (!r.ok) throw (await r.json().catch(() => ({}))).error || "error";
   poll();
@@ -136,19 +144,13 @@ async function admin(path, body, method = "POST") {
 }
 function lockUp() { staff = ""; store("staff", ""); $("lock").hidden = false; $("panel").hidden = true; }
 
-// Two taps for anything that interrupts a singer.
-function confirmTap(button, sureText, action) {
-  if (button.dataset.armed) { delete button.dataset.armed; button.classList.remove("armed"); return action(); }
-  button.dataset.armed = "1"; button.classList.add("armed"); const label = button.textContent; button.textContent = sureText;
-  setTimeout(() => { if (button.dataset.armed) { delete button.dataset.armed; button.classList.remove("armed"); button.textContent = label; } }, 3000);
-}
-
 function debounce(fn, ms) { let h; return (...a) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); }; }
 const sendHelp = debounce(v => admin("help_vocals", { level: v / 100 }).finally(() => dragging.help = false), 300);
 const sendVol = debounce(v => admin("volume", { level: v / 100 }).finally(() => dragging.vol = false), 300);
 
 function applyLang() {
   document.documentElement.lang = lang;
+  document.title = t().title;
   document.querySelectorAll("[data-t]").forEach(n => n.textContent = t()[n.dataset.t]);
   document.querySelectorAll("[data-tp]").forEach(n => { n.placeholder = t()[n.dataset.tp]; n.setAttribute("aria-label", t()[n.dataset.tp]); });
   document.querySelectorAll("[data-tl]").forEach(n => n.setAttribute("aria-label", t()[n.dataset.tl]));
@@ -244,6 +246,9 @@ function render() {
   $("preview").href = `/tv?${q}`;
   $("nextTitle").replaceChildren(t().upNext + " ", el("span", "count", `(${state.queue.length})`));
   if (document.querySelector(".queue [data-armed]")) return; // don't redraw under a pending second tap
+  const key = JSON.stringify([lang, t().remove, state.queue.map(e => [e.id, e.name, e.pinned, e.song.title, e.song.artist])]);
+  if ($("queue").dataset.key === key) return;
+  $("queue").dataset.key = key;
   $("queue").replaceChildren(...(state.queue.length ? state.queue.map(e => {
     const li = el("li");
     const name = el("span", "name", e.name);
@@ -270,7 +275,7 @@ function renderLogos() {
     const rm = el("button", "btn", t().remove);
     img.src = `/logo/${encodeURIComponent(e.file)}`; img.alt = "";
     rm.type = "button"; rm.setAttribute("aria-label", `${t().remove}: ${name}`);
-    rm.onclick = () => confirmTap(rm, t().removeSure, () => admin("logo", { file: e.file }, "DELETE").catch(failed));
+    rm.onclick = () => confirmTap(rm, t().removeSure, () => admin("logo", { file: e.file }, "DELETE"));
     li.append(img, el("span", null, name), rm);
     return li;
   }));
@@ -281,7 +286,7 @@ const saveNights = list => saveSetting("nights", list, true);
 const today = () => { const d = new Date(); return [d.getFullYear(), d.getMonth() + 1, d.getDate()].map(n => String(n).padStart(2, "0")).join("-"); };
 function renderNights() {
   const a = document.activeElement, box = $("nights");
-  if (box.contains(a) && a.tagName !== "BUTTON") return;  // don't fight the staff member mid-change
+  if ((box.contains(a) && a.tagName !== "BUTTON") || box.querySelector("[data-armed]")) return;  // mid-change
   const key = JSON.stringify([state.nights, lang]);
   if (box.dataset.key === key) return;
   box.dataset.key = key;
@@ -296,7 +301,7 @@ function renderNights() {
     day.onchange = () => day.value && change({ date: day.value });
     look.onchange = () => change({ look: look.value });
     yearly.onchange = () => change({ yearly: yearly.checked });
-    rm.onclick = () => saveNights(state.nights.filter((_, j) => j !== i));
+    rm.onclick = () => confirmTap(rm, t().removeSure, () => saveNights(state.nights.filter((_, j) => j !== i)));
     li.append(day, look, every, rm);
     return li;
   }));
@@ -306,7 +311,7 @@ async function poll() {
   if (poll.active) return;
   poll.active = true;
   try {
-    const response = await fetch("/api/state", { signal: AbortSignal.timeout(5000) });
+    const response = await fetch("/api/state", { signal: timeout(5000) });
     if (!response.ok) throw new Error("state");
     state = await response.json(); render();
     $("connection").hidden = true;
@@ -322,7 +327,7 @@ async function poll() {
 
 async function loadHealth() {
   try {
-    const r = await fetch("/api/admin/health", { headers: { "X-Staff": staff }, signal: AbortSignal.timeout(5000) });
+    const r = await fetch("/api/admin/health", { headers: { "X-Staff": staff }, signal: timeout(5000) });
     if (r.status === 403) return lockUp();
     if (!r.ok) throw new Error("health");
     const h = await r.json();
@@ -330,19 +335,19 @@ async function loadHealth() {
     $("tvStatus").textContent = h.tv.connected ? (laptopTv ? t().tvOnLaptop : t().tvOn)
       : `${laptopTv ? t().tvOffLaptop : t().tvOff}${h.tv.seen ? ` (${t().tvSince} ${when(h.tv.seen)})` : ""}`;
     $("networkStatus").textContent = `${h.connection.internet ? t().online : t().localOnly}. ${h.connection.lan_url}`;
-    $("diskStatus").textContent = h.storage.blocked ? t().storageFull : `${h.storage.library_gb} GB / ${h.storage.free_gb} GB free`;
+    $("diskStatus").textContent = h.storage.blocked ? t().storageFull : t().gbFree(h.storage.library_gb, h.storage.free_gb);
     $("workerStatus").textContent = !h.worker.available ? t().workerUnavailable : h.worker.job.wish
       ? t().makingNow(h.worker.job.wish, t().stages[h.worker.job.stage] || h.worker.job.stage, h.worker.job.pct || 0) : t().idleMaker;
     if (h.worker.last_error) $("workerStatus").textContent += ` · ${h.worker.last_error}`;
     $("backupStatus").textContent = h.backup.error ? `${t().backupProblem}: ${h.backup.error}` : h.backup.last_success
       ? `${t().backupOk}: ${new Intl.DateTimeFormat(lang, { dateStyle: "short", timeStyle: "short" }).format(new Date(h.backup.last_success * 1000))}` : t().noBackup;
-  } catch { $("connection").hidden = false; }
+  } catch {}  // kept as last shown; the next try is in 10 s
 }
 
 // Songs: what the song maker is doing, and the songs that need a hand.
 let care = null;
 async function loadCare() {
-  const r = await fetch("/api/admin/songs", { headers: { "X-Staff": staff } }).catch(() => null);
+  const r = await fetch("/api/admin/songs", { headers: { "X-Staff": staff }, signal: timeout(10000) }).catch(() => null);
   if (r && r.ok) { care = await r.json(); renderCare(); }
 }
 function renderCare() {
@@ -377,11 +382,12 @@ $("songCare").addEventListener("toggle", () => { if ($("songCare").open) loadCar
 $("pinForm").addEventListener("submit", async ev => {
   ev.preventDefault();
   const r = await fetch("/api/admin/check", { method: "POST", headers: { "X-Pin": $("pin").value.trim() },
-                                               signal: AbortSignal.timeout(15000) }).catch(() => null);
+                                               signal: timeout(15000) }).catch(() => null);
   if (!r) return toast(t().offline);
   $("pin").value = "";
   if (!r.ok) return toast(r.status === 409 ? t().pinTooEasy : r.status === 429 ? t().locked : t().wrongPin);
   staff = (await r.json()).token; store("staff", staff); unlock();  // tonight's token: the PIN isn't kept on the phone
+  $("eventTitle").tabIndex = -1; $("eventTitle").focus();
 });
 function unlock() { $("lock").hidden = true; $("panel").hidden = false; poll(); }
 // the song is chosen at the first tap: if it changes before the second tap, that tap must not skip the new singer
@@ -397,7 +403,7 @@ $("restart").onclick = () => {
 $("pause").onclick = () => admin("pause", { paused: !state.paused });
 $("help").oninput = e => { dragging.help = true; $("helpOut").textContent = `${e.target.value}%`; sendHelp(+e.target.value); };
 $("vol").oninput = e => { dragging.vol = true; $("volOut").textContent = `${e.target.value}%`; sendVol(+e.target.value); };
-const saveSetting = (key, value, top) => admin("settings", top ? { [key]: value } : { display: { [key]: value } }).catch(code => code !== "pin" && toast(t().bad_setting));
+const saveSetting = (key, value, top) => admin("settings", top ? { [key]: value } : { display: { [key]: value } }).then(ok => { if (ok) toast(t().saved, true); return ok; });
 document.querySelectorAll("#screen [data-key], #rules [data-key]").forEach(el => el.onchange = () => {
   const v = el.type === "checkbox" ? el.checked : el.dataset.top ? +el.value : el.value;
   saveSetting(el.dataset.key, v, el.dataset.top);
@@ -406,17 +412,19 @@ const sendDelay = debounce(v => saveSetting("screen_delay_ms", v).finally(() => 
 $("delay").oninput = e => { dragging.delay = true; $("delayOut").textContent = `${e.target.value} ms`; sendDelay(+e.target.value); };
 $("venueName").onchange = e => e.target.value.trim() && saveSetting("pub_name", e.target.value.trim(), true);
 $("icon").onchange = e => e.target.value.trim() && saveSetting("icon", e.target.value.trim(), true);
-$("accent").onchange = e => saveSetting("accent", e.target.value, true);
+$("accent").onchange = async e => {
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (await saveSetting("accent", e.target.value, true) && contrast(e.target.value, bg) < 3) toast(t().accentHard);
+};
 $("accentReset").onclick = () => saveSetting("accent", "", true);
-$("tonightLook").onchange = e => admin("tonight", { look: e.target.value }).catch(code => code !== "pin" && toast(t().bad_setting));
+$("tonightLook").onchange = e => admin("tonight", { look: e.target.value }).then(ok => ok && toast(t().saved, true));
 $("everywhere").onchange = e => saveSetting("theme", e.target.checked ? "venue" : "auto");
 $("addNight").onclick = () => saveNights([...state.nights, { date: today(), look: "halloween", yearly: true }]);
-const failed = code => code !== "pin" && toast(t()[code] || t().bad_setting);
 $("logoFile").onchange = e => {
   const f = e.target.files[0];
   e.target.value = "";  // picking the same file again must still count
   if (f && f.size > 1e6) return toast(t().logoTooBig);
-  if (f) admin(`logo?look=${encodeURIComponent($("logoLook").value)}`, f).catch(failed);
+  if (f) admin(`logo?look=${encodeURIComponent($("logoLook").value)}`, f).then(ok => ok && toast(t().saved, true));
 };
 $("earlier").onclick = () => admin("nudge", { delta: 0.1 });
 $("later").onclick = () => admin("nudge", { delta: -0.1 });

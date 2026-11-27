@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="/static/guest.css">
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <header>
     <div class="banner" id="banner" aria-hidden="true"><img class="logo" alt=""></div>
     <h1 id="pub">Karaoke</h1>
@@ -22,7 +22,8 @@
     <p class="tagline" data-t="tagline"></p>
   </header>
 
-  <p class="stage" id="stage" aria-live="polite"></p>
+  <p class="stage" id="stage"></p>
+  <p class="sr-only" id="turn" role="status" aria-atomic="true"></p>
   <p id="connection" class="connection" role="status" data-t="reconnect" hidden></p>
   <p id="eventClosed" role="status" data-t="closed" hidden></p>
   <p class="me" id="me" hidden><span id="meText"></span> <button type="button" class="link" id="rename" data-t="change"></button></p>
@@ -53,13 +54,14 @@
     <p data-t="recoveryHelp"></p>
     <label for="recoveryCode" data-t="recoveryCode"></label>
     <input id="recoveryCode" readonly autocomplete="off" spellcheck="false">
+    <button type="button" class="ghost" id="copyCode" data-t="copy"></button>
     <form id="recoverForm">
       <label for="recoverInput" data-t="recoverCode"></label>
       <input id="recoverInput" autocomplete="off" spellcheck="false" maxlength="128" required>
       <button class="ghost" data-t="recover"></button>
     </form>
   </details>
-</div>
+</main>
 
 <dialog id="nameDialog" aria-labelledby="nameTitle">
   <form method="dialog" id="nameForm">

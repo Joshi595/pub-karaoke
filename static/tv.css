@@ -30,6 +30,10 @@ body { font-family: var(--body-font); }
 .join .wifi .qr { width: 20vh; }
 .join p { margin: 1vh 0 0; font-size: 2.6vh; white-space: pre-line; overflow-wrap: anywhere; }
 .join .big { font: 700 4.6vh/1.15 var(--lyric-font); margin: 0 0 1vh; }
+/* "Scan to sing" heads both codes, so its two languages each fit on one line above the QR codes */
+.join > div:first-child { display: contents; }
+.join > div:first-child > .big { grid-column: 1 / -1; }
+.join .wifi { grid-column: 2; grid-row: 2 / span 2; align-self: end; }
 .lineup { align-self: center; background: var(--panel); border-radius: 2vh; padding: 3vh 3vw; backdrop-filter: blur(6px); }
 .lineup h2 { margin: 0 0 1.5vh; font: 400 5vh var(--title-font); }
 .lineup ol { margin: 0; padding: 0 0 0 1.2em; font-size: 3.4vh; line-height: 1.5; }
@@ -40,7 +44,7 @@ body { font-family: var(--body-font); }
 
 /* up next */
 #upnext { display: grid; place-content: center; text-align: center; gap: 2vh; }
-#upnext .who { font: 700 16vh/1 var(--lyric-font); margin: 0; color: var(--accent); }
+#upnext .who { font: 700 16vh/1 var(--lyric-font); margin: 0; color: var(--accent); max-width: 92vw; overflow-wrap: anywhere; }
 #upnext .call { font: 400 6vh var(--title-font); margin: 0; }
 #upnext .song { font-size: 4vh; margin: 0; opacity: .9; }
 #upnext .count { font: 700 9vh/1 var(--lyric-font); margin: 2vh auto 0; width: 16vh; height: 16vh; border-radius: 50%; display: grid; place-content: center; border: .8vh solid var(--accent); }
@@ -82,7 +86,7 @@ body { font-family: var(--body-font); }
 .hl-glow .w.on { filter: drop-shadow(0 0 .28em var(--sung)) brightness(1.12); }
 .hl-pop .w { display: inline-block; transition: transform .14s ease-out; }
 .hl-pop .w.on { transform: translateY(-.07em) scale(1.12); }
-@media (prefers-reduced-motion: reduce) { .hl-pop .w, .layout-scroll #lines, .layout-scroll #lines .line { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .hl-pop .w, .layout-scroll #lines, .layout-scroll #lines .line, #title, #ball { transition: none; } }
 #ball { position: absolute; left: 0; top: 0; width: calc(3vh * var(--scale)); height: calc(3vh * var(--scale)); border-radius: 50%;
   background: var(--accent); box-shadow: 0 0 0 .4vh var(--ink), 0 .8vh 1.2vh #0009; opacity: 0; transition: opacity .3s; pointer-events: none; }
 #ball[hidden] { display: none; }
@@ -104,7 +108,9 @@ body { font-family: var(--body-font); }
 /* applause */
 #applause { display: grid; place-content: center; text-align: center; }
 #applause p { margin: 0; font: 400 9vh/1.1 var(--title-font); }
-#applause .who { font: 700 14vh/1 var(--lyric-font); color: var(--accent); }
+#applause .who, #oops .who { font: 700 14vh/1 var(--lyric-font); color: var(--accent); max-width: 92vw; overflow-wrap: anywhere; }
+#oops { display: grid; place-content: center; text-align: center; gap: 2vh; }
+#oops p { margin: 0 auto; font-size: 5vh; max-width: 80vw; }
 
 /* YouTube karaoke video: for wished songs that aren't made yet */
 #video { background: #000; }

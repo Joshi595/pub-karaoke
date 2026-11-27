@@ -1,7 +1,6 @@
 document.getElementById("printBtn").onclick = () => print();
 const qr = (el, text) => { const q = qrcode(0, "M"); q.addData(text); q.make(); el.innerHTML = q.createSvgTag({ cellSize: 1, margin: 2, scalable: true }); };
-const esc = s => s.replace(/([\\;,:"])/g, "\\$1");
-fetch("/api/state").then(r => r.json()).then(s => {
+fetch("/api/state").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(s => {
   applyVenueLook(s.look);
   useVoice(s); speak();  // tonight's words, when staff want the theme everywhere
   document.querySelectorAll(".pub").forEach(n => n.textContent = s.pub_name);
@@ -9,7 +8,7 @@ fetch("/api/state").then(r => r.json()).then(s => {
   qr(document.getElementById("joinQr"), s.join_url);
   document.getElementById("joinCap").textContent = s.join_url.replace(/^https?:\/\//, "").replace(/\/$/, "");
   if (s.wifi.name) {
-    qr(document.getElementById("wifiQr"), `WIFI:T:WPA;S:${esc(s.wifi.name)};P:${esc(s.wifi.password)};;`);
+    qr(document.getElementById("wifiQr"), wifiCode(s.wifi));
     document.getElementById("wifiCap").textContent = s.wifi.password ? `${s.wifi.name} / ${s.wifi.password}` : s.wifi.name;
   } else document.getElementById("wifiFig").hidden = true;
   const admin = s.join_url.replace(/\/?$/, "/admin").replace(/^https?:\/\//, "");
@@ -19,4 +18,7 @@ fetch("/api/state").then(r => r.json()).then(s => {
   document.getElementById("ruleReady").textContent = `When your name is on the TV, you have ${s.upnext_seconds} seconds to get to the mic. / Wenn dein Name erscheint, hast du ${s.upnext_seconds} Sekunden bis zum Mikro.`;
   const card = document.getElementById("card");
   for (let i = 0; i < 3; i++) { const copy = card.cloneNode(true); copy.removeAttribute("id"); copy.querySelectorAll("[id]").forEach(n => n.removeAttribute("id")); card.parentNode.append(copy); }
+}).catch(() => {  // half-blank cards would be printed as they are: say what to do instead
+  document.body.prepend(Object.assign(document.createElement("p"), { className: "noprint failed",
+    textContent: "Couldn't load the venue's details. Is Pub Karaoke running? Reload this page. / Die Angaben konnten nicht geladen werden. Läuft Pub Karaoke? Seite neu laden." }));
 });

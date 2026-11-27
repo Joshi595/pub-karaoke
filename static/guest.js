@@ -2,7 +2,7 @@ const SHELVES = ["ready", "here", "top", "classics", "irish", "german", "schlage
 const T = {
   en: {
     tagline: "Pick a song. We'll call your name.",
-    search: "Song, artist or a line you remember",
+    search: "Song, artist or lyrics…",
     shelves: "Song lists",
     shelf: { ready: "Ready now", here: "Popular here", top: "Top hits", classics: "Crowd favourites", irish: "Irish", german: "German",
              schlager: "Schlager", "80s": "80s", rock: "Rock", country: "Country", duets: "Duets" },
@@ -41,7 +41,7 @@ const T = {
   },
   de: {
     tagline: "Such dir einen Song aus. Wir rufen dich auf.",
-    search: "Song, Interpret oder eine Textzeile",
+    search: "Song, Interpret oder Text…",
     shelves: "Songlisten",
     shelf: { ready: "Sofort singbar", here: "Beliebt hier", top: "Top-Hits", classics: "Publikumslieblinge", irish: "Irisch", german: "Deutsch",
              schlager: "Schlager", "80s": "80er", rock: "Rock", country: "Country", duets: "Duette" },
@@ -94,7 +94,13 @@ Object.assign(T.en.err, { bad_request: "Please check your entry and try again.",
 Object.assign(T.de.err, { bad_request: "Bitte die Eingabe prüfen und erneut versuchen.", storage_full: "Songspeicher voll. Einen fertigen Song wählen oder das Personal fragen.",
   busy: "Gerade viele Anfragen. Bitte in ein paar Sekunden erneut versuchen.", guest_required: "Bitte neu laden, um dein Ticket zu verbinden.",
   bad_recovery: "Dieser Code ist ungültig oder abgelaufen.", event_closed: "Songwünsche sind geschlossen. Bitte das Personal fragen." });
-T.en.badge.make = "Needs preparation"; T.de.badge.make = "Wird vorbereitet";
+T.en.badge.make = "Needs preparation"; T.de.badge.make = "Noch vorzubereiten";  // not "Wird vorbereitet": that's "making"
+T.de.place = "in der Reihe";
+Object.assign(T.en, { loading: "Loading songs…", removeSure: "Tap again to remove", copy: "Copy code",
+  copied: "Copied. Keep it somewhere safe.", copyManual: "Selected: copy it with your phone's menu." });
+Object.assign(T.de, { loading: "Songs werden geladen…", removeSure: "Nochmal tippen zum Entfernen", copy: "Code kopieren",
+  copied: "Kopiert. Gut aufbewahren.", copyManual: "Markiert: über das Menü deines Handys kopieren." });
+T.en.err.generic = "Something went wrong. Please try again."; T.de.err.generic = "Da ist etwas schiefgelaufen. Bitte versuch es nochmal.";
 T.en.wishText = "Request a song. You can sing once it is ready.";
 T.de.wishText = "Song wünschen. Du kannst singen, sobald er fertig ist.";
 T.en.wished = "Added! Your song is queued for preparation. Watch the screen for your name.";
@@ -114,7 +120,7 @@ let name = store.get("name") || "";
 let guestToken = store.get("guest_token") || "", guestPending = null;
 async function ensureGuest() {
   if (!guestPending) guestPending = (async () => {
-    const r = await fetch("/api/guest", { method: "POST", headers: { "X-Guest-Token": guestToken }, signal: AbortSignal.timeout(10000) });
+    const r = await fetch("/api/guest", { method: "POST", headers: { "X-Guest-Token": guestToken }, signal: timeout(10000) });
     if (!r.ok) throw "busy";
     const data = await r.json();
     guestToken = data.token; store.set("guest_token", guestToken);
@@ -124,7 +130,7 @@ async function ensureGuest() {
 }
 let state = null, pendingSong = null;
 // What the list shows: a shelf, an artist's songs, or search results for what's typed.
-let view = { kind: "shelf", shelf: "ready", page: 0 }, rows = [], artists = [], hasMore = false, seq = 0;
+let view = { kind: "shelf", shelf: "ready", page: 0 }, rows = [], artists = [], hasMore = false, seq = 0, loaded = false;
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const t = () => voiced(T[lang], lang);  // in tonight's voice, when staff want the theme everywhere (look.js)
@@ -135,14 +141,14 @@ function toast(msg, bad) {
   clearTimeout(toast.timer); toast.timer = setTimeout(() => box.classList.remove("show"), 3500);
 }
 function errorText(code) {
-  const e = t().err[code] || t().err.network;
+  const e = t().err[code] || (typeof code === "string" && code !== "network" ? t().err.generic : t().err.network);
   return typeof e === "function" ? e(state ? state.songs_per_singer : 2) : e;
 }
-async function api(method, url, body) {
+async function api(method, url, body, ms = 20000) {
   if (method === "POST" && (url === "/api/queue" || url === "/api/wish") && !guestToken) await ensureGuest();
   let r;
   try { r = await fetch(url, { method, headers: { "Content-Type": "application/json", "X-Guest-Token": guestToken },
-    signal: AbortSignal.timeout(20000), body: body ? JSON.stringify(body) : undefined }); }
+    signal: timeout(ms), body: body ? JSON.stringify(body) : undefined }); }
   catch { throw "network"; }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw data.error || "network";
@@ -232,28 +238,36 @@ function renderList() {
   hint.classList.toggle("heading", view.kind === "artist");
   if (view.kind === "search") hint.textContent = rows.length || artists.length ? t().found(rows.length) : t().none;
   else if (view.kind === "artist") hint.textContent = view.artist;
-  else hint.textContent = rows.length ? "" : (t().shelfEmpty[view.shelf] || t().none);
+  else hint.textContent = rows.length ? "" : !loaded ? t().loading : (t().shelfEmpty[view.shelf] || t().none);
 }
 
+function loading(on) {
+  if (on) $("songs").setAttribute("aria-busy", "true"); else $("songs").removeAttribute("aria-busy");
+  $("more").disabled = on;
+}
 async function openShelf(shelf, page = 0) {
   const my = ++seq;
   view = { kind: "shelf", shelf, page };
+  loading(true);
   try {
     const got = (await api("GET", `/api/browse?shelf=${encodeURIComponent(shelf)}&page=${page}`)).songs;
     if (my !== seq) return;
     rows = page ? rows.concat(got) : got; artists = []; hasMore = got.length === 30;
-  } catch (code) { if (my === seq) toast(errorText(code), true); }
+  } catch (code) { if (my !== seq) return; toast(errorText(code), true); }
+  loading(false); loaded = true;
   renderChips(); renderList();
 }
 async function openArtist(artist) {
   const my = ++seq;
   view = { kind: "artist", artist };
   $("q").value = "";
+  loading(true);
   try {
     const got = (await api("GET", `/api/browse?artist=${encodeURIComponent(artist)}`)).songs;
     if (my !== seq) return;
     rows = got; artists = []; hasMore = false;
-  } catch (code) { if (my === seq) toast(errorText(code), true); }
+  } catch (code) { if (my !== seq) return; toast(errorText(code), true); }
+  loading(false);
   renderChips(); renderList();
   window.scrollTo({ top: $("q").getBoundingClientRect().top + scrollY - 8 });
 }
@@ -261,6 +275,7 @@ async function search() {
   const q = $("q").value.trim();
   if (!q) return openShelf(view.kind === "shelf" ? view.shelf : "ready");
   const my = ++seq;
+  loading(false);  // a search answers fast: no dimming on every keystroke
   try {
     const got = await api("GET", `/api/search?q=${encodeURIComponent(q)}`);
     if (my !== seq) return;  // an older search answered late: the newer one wins
@@ -297,14 +312,26 @@ function renderState() {
   $("meText").textContent = name ? t().singingAs(name) : "";
   $("eventClosed").hidden = state.event?.open !== false;
 
-  const tickets = [];
-  if (np && np.mine) tickets.push(ticket(np, t().now, t().onNow, true));
-  state.queue.forEach((e, i) => {
-    if (!e.mine) return;
-    tickets.push(ticket(e, String(i + 1), i === 0 ? t().next : t().before(i), false));
-  });
-  $("tickets").hidden = !tickets.length;
-  $("ticketList").replaceChildren(...tickets);
+  const key = JSON.stringify([lang, t().next, np && np.mine && np.id, state.queue.map((e, i) => e.mine && [e.id, i, e.status, e.pct, e.song.title])]);
+  if (key !== renderState.tickets && !$("ticketList").querySelector("[data-armed]")) {
+    renderState.tickets = key;
+    const tickets = [];
+    if (np && np.mine) tickets.push(ticket(np, t().now, t().onNow, true));
+    state.queue.forEach((e, i) => {
+      if (!e.mine) return;
+      tickets.push(ticket(e, String(i + 1), i === 0 ? t().next : t().before(i), false));
+    });
+    $("tickets").hidden = !tickets.length;
+    $("ticketList").replaceChildren(...tickets);
+  }
+
+  // The one thing a guest waits for, said once when it changes (screen readers), with a buzz and in the tab's title.
+  const first = np && np.mine ? "on" : state.queue.findIndex(e => e.mine);
+  const turn = first === "on" ? t().onNow : first === 0 ? t().next : first > 0 ? t().before(first) : "";
+  if (renderState.first !== undefined && first !== renderState.first && (first === "on" || first === 0)) navigator.vibrate?.(first === "on" ? [300, 150, 300] : 250);
+  renderState.first = first;
+  if ($("turn").textContent !== turn) $("turn").textContent = turn;
+  if (first === "on" || first === 0) document.title = `🎤 ${turn}`;
 }
 
 function ticket(e, count, when, on) {
@@ -316,10 +343,11 @@ function ticket(e, count, when, on) {
     const rm = el("button", "remove", t().remove);
     rm.type = "button";
     rm.setAttribute("aria-label", `${t().remove}: ${e.song.title}`);
-    rm.onclick = async () => {
+    rm.onclick = () => confirmTap(rm, t().removeSure, async () => {  // your place in line is lost: two taps
+      rm.disabled = true;
       try { await api("DELETE", `/api/queue/${encodeURIComponent(e.id)}?device=${encodeURIComponent(device)}`); toast(t().removed); poll(); }
-      catch (code) { toast(errorText(code), true); }
-    };
+      catch (code) { rm.disabled = false; toast(errorText(code), true); }
+    });
     card.append(rm);
   }
   const song = el("p", "song", e.song.title), by = el("p", "by", e.song.artist);
@@ -336,6 +364,7 @@ function ticket(e, count, when, on) {
 // ---------------------------------------------------------------- adding a song
 
 function pick(song) {
+  if (add.busy) return;
   if (song.status === "video" && !song.video) { pendingSong = song; return $("videoDialog").showModal(); }
   pendingSong = song;
   if (name) return add();
@@ -344,7 +373,8 @@ function pick(song) {
 }
 async function add() {
   const song = pendingSong; pendingSong = null;
-  if (!song) return;
+  if (!song || add.busy) return;
+  add.busy = true;
   try {
     if (song.wish) {
       toast(t().finding);
@@ -363,7 +393,7 @@ async function add() {
   } catch (code) {
     if (code === "no_lyrics") { pendingSong = song; $("videoDialog").showModal(); return; }
     toast(errorText(code), true);
-  }
+  } finally { add.busy = false; }
 }
 
 $("nameForm").addEventListener("submit", ev => {
@@ -388,11 +418,11 @@ async function poll() {
   if (poll.active) return;
   poll.active = true;
   try {
-    state = await api("GET", `/api/state?device=${encodeURIComponent(device)}`);
+    state = await api("GET", `/api/state?device=${encodeURIComponent(device)}`, null, 8000);
     renderState();
     $("connection").hidden = true;
     reloadIfUpdated(state.version, !document.querySelector("dialog[open]") && !document.activeElement?.matches("input, textarea"));
-    const mine = state.queue.filter(e => e.mine).map(e => e.song.title).join();
+    const mine = state.queue.filter(e => e.mine).map(e => e.song.title).join() + (state.event?.open !== false);
     if (mine !== poll.mine) { poll.mine = mine; renderList(); }  // redraw the list only when its badges change, so taps aren't lost
   } catch { $("connection").hidden = false; }
   finally { poll.active = false; }
@@ -410,5 +440,10 @@ $("recoverForm").addEventListener("submit", async ev => {
   try { await ensureGuest(); } catch { $("connection").hidden = false; }
   await poll();
   openShelf("ready");
-  setInterval(poll, 2000);
+  setInterval(() => document.hidden || poll(), 2000);  // a phone in a pocket doesn't ask, for its battery and the laptop
+  document.addEventListener("visibilitychange", () => document.hidden || poll());
 })();
+$("copyCode").onclick = async () => {
+  try { await navigator.clipboard.writeText(guestToken); toast(t().copied); }
+  catch { $("recoveryCode").select(); toast(t().copyManual); }  // no clipboard on plain http: select it instead
+};

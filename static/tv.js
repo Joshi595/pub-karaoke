@@ -131,7 +131,6 @@ function qr(target, text) {
   }
   if (target.dataset.text !== text) { target.innerHTML = qrCache[text]; target.dataset.text = text; }
 }
-const wifiCode = w => `WIFI:T:WPA;S:${w.name.replace(/([\\;,:"])/g, "\\$1")};P:${w.password.replace(/([\\;,:"])/g, "\\$1")};;`;
 
 // ---------------------------------------------------------------- lyrics
 
@@ -307,7 +306,9 @@ ${w.password}` : w.name; }
   // nobody's song is ready yet: say so, so the room knows the screen isn't stuck
   const head = state.queue[0], none = !state.now_playing && head && state.queue.every(e => e.status === "making" || e.status === "waiting");
   $("prep").hidden = !none;
-  if (none) $("prep").textContent = `Getting ${head.name}'s song ready… ${head.pct || 0}% / ${head.name}s Song wird vorbereitet… ${head.pct || 0} %`;
+  // German: "Hans' Song", "Annas Song"
+  const deOf = /[sßxz]$/i.test(head?.name || "") ? `${head?.name}'` : `${head?.name}s`;
+  if (none) $("prep").textContent = `Getting ${head.name}'s song ready… ${head.pct || 0}% / ${deOf} Song wird vorbereitet… ${head.pct || 0} %`;
 }
 function renderBar() {
   if (!current) return;
@@ -437,8 +438,12 @@ async function performSong(entry) {
   if (offline) {  // the same singer goes again once the link is back: the server still has them on stage
     current = null; show("lobby"); return;
   }
-  if (loadError) {  // a broken song folder or video must not block the night: drop it and move on
+  if (loadError) {  // a broken song folder or video must not block the night: say so, drop it and move on
     await finish(entry, alive, loadError);
+    if (!alive()) return;
+    $("oopsWho").textContent = entry.name;  // the singer at the mic hears why, instead of the next name being called
+    show("oops");
+    await sleep(5000);
     if (!alive()) return;
     current = null; show("lobby"); return next();
   }

@@ -108,8 +108,9 @@ class Catalog:
             return []
         ok = lambda i: self._allowed(i, hide_explicit, langs)
         longest = max(tokens, key=len)  # cheap first pass: the longest typed word appears somewhere
-        found = {i: self._score(i, tokens, qf) for i in [i for i, comp in enumerate(self.compact) if longest in comp]
-                 if all(t in self.compact[i] for t in tokens) and ok(i)}
+        # ponytail: the 2,000 most popular names that contain every word are scored, so "a" costs what "abba" does
+        cands = [i for i, comp in enumerate(self.compact) if longest in comp and all(t in comp for t in tokens)][:2000]
+        found = {i: self._score(i, tokens, qf) for i in cands if ok(i)}
         hits = sorted(found, key=found.get, reverse=True)
         lyric = {}
         if len(tokens) >= 3:  # a remembered line of a song that's ready

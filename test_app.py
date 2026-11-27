@@ -574,6 +574,17 @@ def test_many_wrong_pins_over_the_internet_close_it_for_everyone(client):
     assert client.post("/api/admin/check", headers={"X-Pin": "9999"}).status_code == 200  # the laptop still gets in
 
 
+def test_a_staff_phone_unlocked_tonight_rides_out_a_lockout(client):
+    staff = internet("198.51.100.7")
+    token = client.post("/api/admin/check", environ_base=staff["environ_base"], headers={**staff["headers"], "X-Pin": "9999"}).json["token"]
+    for i in range(30):  # a prankster with the TV's QR code guesses PINs
+        phone = internet(f"203.0.113.{i}")
+        client.post("/api/admin/check", environ_base=phone["environ_base"], headers={**phone["headers"], "X-Pin": "0000"})
+    as_staff = {"environ_base": staff["environ_base"], "headers": {**staff["headers"], "X-Staff": token}}
+    assert client.post("/api/admin/pause", json={"paused": True}, **as_staff).status_code == 200
+    assert client.post("/api/admin/pause", json={"paused": False}, headers={"X-Staff": "x" * 43}).status_code == 403
+
+
 def test_a_pin_with_odd_characters_is_just_wrong(client):
     assert client.post("/api/admin/check", headers={"X-Pin": "ü"}).status_code == 403
 
@@ -621,9 +632,9 @@ def test_the_queue_has_a_ceiling():
     from app import MAX_QUEUE
     p = Party(dict(SONGS), songs_per_singer=1)
     for i in range(MAX_QUEUE):
-        p.add(f"Singer {i}", "d", "s1")
+        p.add(f"Singer {i}", f"phone {i}", "s1")
     with pytest.raises(QueueError, match="full"):
-        p.add("One more", "d", "s1")
+        p.add("One more", "another phone", "s1")
 
 
 def test_names_lose_invisible_characters():

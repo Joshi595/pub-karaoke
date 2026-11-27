@@ -1,6 +1,6 @@
 """Pub Karaoke live app: guest phones, staff phone and the TV, all on the venue's laptop."""
 import hmac
-import atexit
+import calendar
 import ipaddress
 import json
 import os
@@ -98,7 +98,7 @@ class Party:
         catalog: its id in the song list. video: it can't be made (no timed lyrics), so it plays from YouTube."""
         if not wish and (not isinstance(song_id, str) or song_id not in self.songs):
             raise QueueError("unknown_song")
-        name = self.check(name, song_id, wish)
+        name = self.check(name, song_id, wish, device)
         entry = {"id": uuid.uuid4().hex[:8], "name": name, "device": str(device)[:64], "song_id": song_id,
                  "at": self.now(), "pinned": False}
         if wish:
@@ -111,7 +111,7 @@ class Party:
         self.save()
         return entry
 
-    def check(self, name, song_id, wish=None):
+    def check(self, name, song_id, wish=None, device=None):
         """Would this pick be accepted? Raises like add(), so phones hear 'no' before any slow lookup."""
         name = clean_name(name)
         if not self.event_open:
@@ -123,6 +123,9 @@ class Party:
         if any((song_id and e["song_id"] == song_id) or (wish and e.get("wish") == wish) for e in mine):
             raise QueueError("duplicate")
         if len(mine) >= self.songs_per_singer:
+            raise QueueError("limit")
+        # friends share a phone, so a phone may wait for three people's songs, but can't fill the queue alone
+        if device and sum(e["device"] == str(device)[:64] for e in self.queue) >= 3 * self.songs_per_singer:
             raise QueueError("limit")
         return name
 
@@ -330,7 +333,8 @@ def night_look(special, day):
     """The look of a special night on this day, or "". A yearly night comes back on its month and day."""
     for n in special:
         d = date.fromisoformat(n["date"])
-        if d == day or (n["yearly"] and (d.month, d.day) == (day.month, day.day)):
+        leap_day = (d.month, d.day) == (2, 29) and (day.month, day.day) == (2, 28) and not calendar.isleap(day.year)
+        if d == day or (n["yearly"] and ((d.month, d.day) == (day.month, day.day) or leap_day)):
             return n["look"]
     return ""
 
@@ -578,20 +582,25 @@ def create_app(root):
     status = read_json(status_file, {})    # catalog id -> "no_lyrics" | "failed": only the YouTube karaoke video can play
     history = read_json(history_file, {})  # catalog id -> [times picked here, last picked]: "Popular here" and auto-download
     seen = [None]
+    # Searching ~90,000 songs takes a while: it has its own lock, so the TV and the other phones never wait for it.
+    # Order: `lock` then `catalog_lock`, never the other way round.
+    catalog_lock = threading.Lock()
 
     def refresh_library(force=False):
         """Songs made beside the app (its own maker, the nightly run) show up without a restart; deleted ones go."""
         try:
-            found = tuple((str(p.relative_to(library)), p.stat().st_mtime_ns, p.stat().st_size)
-                          for p in sorted(library.glob("*/*")) if p.is_file()
-                          and p.name in LIBRARY_FILES)
+            # asked on every search keystroke: os.scandir lists each file's size and time with the folder (on Windows
+            # without one stat per file), ~10 ms for 400 songs where glob + stat took ~150 ms
+            found = tuple(sorted((d.name + "/" + e.name, e.stat().st_mtime_ns, e.stat().st_size)
+                                 for d in os.scandir(library) if d.is_dir()
+                                 for e in os.scandir(d.path) if e.name in LIBRARY_FILES and e.is_file()))
         except OSError:
             return  # a concurrent atomic replacement will be picked up on the next poll
         if force or found != seen[0]:
             # the disk is read outside the queue lock: a slow disk must not hold up the TV and the guests' phones
             fresh = load_songs(library)
             lines = {slug: lyric_lines(library / slug) for slug in fresh}
-            with lock:
+            with lock, catalog_lock:
                 seen[0] = found
                 songs.clear()
                 songs.update(fresh)
@@ -863,6 +872,9 @@ def create_app(root):
         return value
 
     wrong_pins = {}  # device address -> (failures, locked_until)
+    # A staff phone that unlocked tonight holds a random token instead of the PIN. It works until the night rolls over,
+    # however many wrong PINs a prankster with the TV's QR code sends meanwhile: lockouts only slow down PIN guesses.
+    staff_tokens = {}  # sha256 digest -> the night it was issued for
     internet_fails = []  # when wrong PINs came in over the internet link, for the last 10 minutes
 
     # Over the internet link every request arrives from cloudflared on this laptop, and Cloudflare's header names the
@@ -941,7 +953,7 @@ def create_app(root):
             owner = guest_device(required=True)
             rate_limit("pick-guest", owner, 5, 60)
             rate_limit("pick-ip", client_ip(), 60, 60)
-        if public_request() and request.path == "/api/search":
+        if public_request() and request.path in ("/api/search", "/api/browse"):
             rate_limit("search", client_ip(), 600, 60)
 
     @app.post("/api/guest")
@@ -956,8 +968,13 @@ def create_app(root):
                 cutoff = time.time() - 30 * 86400
                 for key in [key for key, r in guests.items() if r.get("at", 0) < cutoff]:
                     guests.pop(key)
-                if len(guests) >= 5000:
-                    raise QueueError("busy")
+                if len(guests) >= 5000:  # full: the oldest ticket with no song waiting makes room
+                    waiting = {e["device"] for e in party.queue} | {(party.now_playing or {}).get("device")}
+                    oldest = min((k for k, r in guests.items() if r.get("device") not in waiting),
+                                 key=lambda k: guests[k].get("at", 0), default=None)
+                    if oldest is None:
+                        raise QueueError("busy")
+                    guests.pop(oldest)
                 guests[token_digest(token)] = {"device": owner, "at": time.time()}
                 if not write_json(guests_file, guests):
                     guests.pop(token_digest(token), None)
@@ -999,6 +1016,9 @@ def create_app(root):
         @wraps(fn)
         def wrapped(*a, **kw):
             with lock:  # the counts below are shared by 16 server threads
+                token = request.headers.get("X-Staff", "")
+                if 32 <= len(token) <= 128 and staff_tokens.get(token_digest(token)) == party.event_date:
+                    return fn(*a, **kw)
                 who, now = client_ip(), time.time()
                 for address in [address for address, record in wrong_pins.items() if now - record[2] > 600]:
                     wrong_pins.pop(address, None)
@@ -1054,7 +1074,19 @@ def create_app(root):
         response = jsonify(error=code)
         if code == "busy":
             response.headers["Retry-After"] = "5"
-        return response, 429 if code == "busy" else 403 if code in ("forbidden", "guest_required") else 400
+        status = {"busy": 429, "forbidden": 403, "guest_required": 403, "not_found": 404,
+                  "storage_full": 503, "offline": 503}.get(code, 400)
+        return response, status
+
+    @app.errorhandler(404)
+    @app.errorhandler(405)
+    @app.errorhandler(500)
+    def api_http_error(e):
+        """Phones and the TV read every /api/ answer as JSON, failures too."""
+        if not request.path.startswith("/api/"):
+            return e
+        status = getattr(e, "code", 500)
+        return jsonify(error={404: "not_found", 405: "bad_request"}.get(status, "error")), status
 
     for page in ("admin", "tv", "print"):
         app.add_url_rule(f"/{page}", page, lambda page=page: send_from_directory(static, f"{page}.html"))
@@ -1070,8 +1102,10 @@ def create_app(root):
     def api_search():
         q = request.args.get("q", "")[:80]
         refresh_library()
+        with catalog_lock:
+            rows, artists = catalog.search(q, **filters()), catalog.artists(q)
         with lock:
-            return jsonify(songs=[mark(v) for v in catalog.search(q, **filters())], artists=catalog.artists(q))
+            return jsonify(songs=[mark(v) for v in rows], artists=artists)
 
     @app.get("/api/browse")
     def api_browse():
@@ -1079,10 +1113,13 @@ def create_app(root):
         page = request.args.get("page", "0")
         page = int(page) if page.isdigit() and len(page) <= 6 else 0
         refresh_library()
+        artist = request.args.get("artist")
         with lock:
-            artist = request.args.get("artist")
+            picked = popular()
+        with catalog_lock:
             rows = (catalog.by_artist(artist, **filters()) if artist else
-                    catalog.shelf(request.args.get("shelf", "top"), page=page, popular=popular(), **filters()))
+                    catalog.shelf(request.args.get("shelf", "top"), page=page, popular=picked, **filters()))
+        with lock:
             return jsonify(songs=[mark(v) for v in rows])
 
     def venue_look():
@@ -1140,7 +1177,7 @@ def create_app(root):
             text = f"{row['artist']} - {row['title']}"
             if party.can_make and storage()["blocked"]:
                 raise QueueError("storage_full")
-            party.check(name, "", text)  # over the limit or already queued: say so before the slow checks
+            party.check(name, "", text, device)  # over the limit or already queued: say so before the slow checks
             known = status.get(row["id"]) or ("failed" if text in gave_up() else None)
         if known is None:  # the network checks run outside the lock so other phones aren't held up
             ok = cached_lookup(("lyrics", row["id"]), lambda: has_synced_lyrics(row["artist"], row["title"]))
@@ -1193,7 +1230,7 @@ def create_app(root):
                 slug = slugify(artist, title)
                 if slug in catalog.by_slug and not allowed_song(slug=slug):
                     raise QueueError("unknown_song")
-            party.check(b.get("name"), "", text)  # fail fast, before the slow YouTube search
+            party.check(b.get("name"), "", text, device)  # fail fast, before the slow YouTube search
             hopeless = text in gave_up()  # tried tonight and couldn't be made
             wishes = root / "wishes.txt"
             known = wishes.read_text(encoding="utf-8").splitlines() if wishes.exists() else []
@@ -1230,7 +1267,14 @@ def create_app(root):
     @app.post("/api/admin/check")
     @admin
     def admin_check():
-        return jsonify(ok=True)
+        """The PIN was right: this phone gets tonight's staff token, so it needn't keep the PIN."""
+        for digest in [d for d, night in staff_tokens.items() if night != party.event_date]:  # last night's
+            staff_tokens.pop(digest)
+        if len(staff_tokens) >= 200:  # staff phones per night: plenty
+            staff_tokens.pop(next(iter(staff_tokens)))
+        token = secrets.token_urlsafe(32)
+        staff_tokens[token_digest(token)] = party.event_date
+        return jsonify(ok=True, token=token)
 
     @app.post("/api/admin/event")
     @admin
@@ -1416,7 +1460,7 @@ def create_app(root):
         look, day = body().get("look"), date.fromisoformat(party.day())
         if look not in LOOKS:
             raise QueueError("bad_setting")
-        rest = [n for n in settings["nights"] if n["date"] != day.isoformat() or n["yearly"]]
+        rest = [n for n in settings["nights"] if n["yearly"] or n["date"] > day.isoformat()]  # past one-offs go
         if look != (night_look(rest, day) or settings["look"]):
             if len(rest) >= 50:
                 raise QueueError("bad_setting")

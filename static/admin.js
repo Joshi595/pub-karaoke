@@ -115,7 +115,7 @@ const $ = id => document.getElementById(id);
 const store = (k, v) => { try { return v === undefined ? sessionStorage.getItem(k) : sessionStorage.setItem(k, v); } catch { return null; } };
 const local = (k, v) => { try { return v === undefined ? localStorage.getItem(k) : localStorage.setItem(k, v); } catch { return null; } };
 let lang = local("lang") || ((navigator.language || "").startsWith("de") ? "de" : "en");
-let pin = store("pin") || "", state = null, dragging = { help: false, vol: false, delay: false };
+let staff = store("staff") || "", state = null, dragging = { help: false, vol: false, delay: false };
 const t = () => voiced(T[lang], lang);  // the title in tonight's voice, when the theme is everywhere (look.js)
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -123,7 +123,7 @@ function toast(msg) { const b = $("toast"); b.textContent = msg; b.classList.add
 async function admin(path, body, method = "POST") {
   try {
   const file = body instanceof Blob;  // the logo goes as it is; everything else as JSON
-  const r = await fetch(`/api/admin/${path}`, { method, headers: { "Content-Type": file ? body.type : "application/json", "X-Pin": pin },
+  const r = await fetch(`/api/admin/${path}`, { method, headers: { "Content-Type": file ? body.type : "application/json", "X-Staff": staff },
                                                  signal: AbortSignal.timeout(15000), body: file ? body : JSON.stringify(body || {}) });
   if (r.status === 403) { lockUp(); throw "pin"; }
   if (!r.ok) throw (await r.json().catch(() => ({}))).error || "error";
@@ -134,7 +134,7 @@ async function admin(path, body, method = "POST") {
     return false;
   }
 }
-function lockUp() { pin = ""; store("pin", ""); $("lock").hidden = false; $("panel").hidden = true; }
+function lockUp() { staff = ""; store("staff", ""); $("lock").hidden = false; $("panel").hidden = true; }
 
 // Two taps for anything that interrupts a singer.
 function confirmTap(button, sureText, action) {
@@ -314,7 +314,7 @@ async function poll() {
   }
   catch { $("connection").hidden = false; }
   finally { poll.active = false; }
-  if (pin && Date.now() - (poll.healthAt || 0) > 10000) {
+  if (staff && Date.now() - (poll.healthAt || 0) > 10000) {
     poll.healthAt = Date.now(); loadHealth();
   }
   if ($("songCare").open) loadCare();
@@ -322,7 +322,7 @@ async function poll() {
 
 async function loadHealth() {
   try {
-    const r = await fetch("/api/admin/health", { headers: { "X-Pin": pin }, signal: AbortSignal.timeout(5000) });
+    const r = await fetch("/api/admin/health", { headers: { "X-Staff": staff }, signal: AbortSignal.timeout(5000) });
     if (r.status === 403) return lockUp();
     if (!r.ok) throw new Error("health");
     const h = await r.json();
@@ -342,7 +342,7 @@ async function loadHealth() {
 // Songs: what the song maker is doing, and the songs that need a hand.
 let care = null;
 async function loadCare() {
-  const r = await fetch("/api/admin/songs", { headers: { "X-Pin": pin } }).catch(() => null);
+  const r = await fetch("/api/admin/songs", { headers: { "X-Staff": staff } }).catch(() => null);
   if (r && r.ok) { care = await r.json(); renderCare(); }
 }
 function renderCare() {
@@ -376,11 +376,12 @@ $("songCare").addEventListener("toggle", () => { if ($("songCare").open) loadCar
 
 $("pinForm").addEventListener("submit", async ev => {
   ev.preventDefault();
-  pin = $("pin").value.trim();
-  const r = await fetch("/api/admin/check", { method: "POST", headers: { "X-Pin": pin } }).catch(() => null);
+  const r = await fetch("/api/admin/check", { method: "POST", headers: { "X-Pin": $("pin").value.trim() },
+                                               signal: AbortSignal.timeout(15000) }).catch(() => null);
   if (!r) return toast(t().offline);
-  if (!r.ok) { $("pin").value = ""; return toast(r.status === 409 ? t().pinTooEasy : r.status === 429 ? t().locked : t().wrongPin); }
-  store("pin", pin); unlock();
+  $("pin").value = "";
+  if (!r.ok) return toast(r.status === 409 ? t().pinTooEasy : r.status === 429 ? t().locked : t().wrongPin);
+  staff = (await r.json()).token; store("staff", staff); unlock();  // tonight's token: the PIN isn't kept on the phone
 });
 function unlock() { $("lock").hidden = true; $("panel").hidden = false; poll(); }
 // the song is chosen at the first tap: if it changes before the second tap, that tap must not skip the new singer
@@ -427,5 +428,5 @@ $("newEvent").onclick = () => confirmTap($("newEvent"), t().newEventSure, async 
 document.querySelectorAll(".lang button").forEach(b => b.onclick = () => { lang = b.dataset.lang; local("lang", lang); applyLang(); });
 
 applyLang();
-if (pin) unlock();
-setInterval(() => { if (pin) poll(); }, 2000);
+if (staff) unlock();
+setInterval(() => { if (staff) poll(); }, 2000);

@@ -385,3 +385,37 @@ def test_a_taken_tv_link_port_does_not_stop_the_app(tmp_path, monkeypatch, capsy
     with tv_link.running_link(tmp_path, 5000):
         pass  # guests and a local TV carry on
     assert "TV link not started" in capsys.readouterr().out
+
+
+def test_one_phone_cannot_fill_the_queue_with_invented_names(venue):
+    _, local, _ = venue
+    names = [f"Singer {i}" for i in range(8)]
+    results = [local.post("/api/queue", json={"name": n, "device": "one-phone", "song_id": "test-ready"}).status_code for n in names]
+    assert results == [200] * 6 + [400] * 2  # three friends' songs fit (2 each); a seventh name doesn't
+
+
+def test_a_full_guest_book_makes_room_instead_of_refusing_everyone(tmp_path):
+    now = time.time()
+    book = {token_digest(f"guest-{i:040d}"): {"device": f"d{i}", "at": now - 3600 + i} for i in range(5000)}
+    (tmp_path / "guests.json").write_text(json.dumps(book))
+    (tmp_path / "settings.json").write_text(json.dumps({"pin": "999999", "internet_link": False, "auto_download": False}))
+    web = app.create_app(tmp_path)
+    try:
+        assert Client(app.PublicIngress(web), Response).post("/api/guest").status_code == 200
+        kept = json.loads((tmp_path / "guests.json").read_text())
+        assert len(kept) == 5000 and token_digest(f"guest-{0:040d}") not in kept  # the oldest made room
+    finally:
+        web.config["shutdown"]()
+
+
+def test_api_failures_answer_in_json(venue):
+    _, local, _ = venue
+    assert local.get("/api/nope").json == {"error": "not_found"}
+    assert local.get("/api/queue").status_code == 405 and local.get("/api/queue").json["error"] == "bad_request"
+    assert local.delete("/api/queue/nobody?device=x").status_code == 404
+
+
+def test_special_nights_make_room_and_leap_days_come_back():
+    feb29 = [{"date": "2028-02-29", "look": "halloween", "yearly": True}]
+    assert app.night_look(feb29, app.date(2029, 2, 28)) == "halloween"
+    assert app.night_look(feb29, app.date(2032, 2, 28)) == ""  # a leap year has its own 29th

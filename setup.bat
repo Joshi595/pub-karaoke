@@ -56,19 +56,21 @@ where nvidia-smi >nul 2>&1 && (
 
 if /i "%~1"=="/pub" exit /b 0
 :shortcut
-powershell -NoProfile -Command "$s = (New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Desktop') + '\Pub Karaoke.lnk'); $s.TargetPath = '%~dp0start-karaoke.bat'; $s.WorkingDirectory = '%~dp0'; $s.Save()"
+rem Paths reach PowerShell through the environment, never pasted into its quotes: a folder like O'Brien broke that.
+set "KARAOKE_DIR=%~dp0"
+powershell -NoProfile -Command "$d = $env:KARAOKE_DIR; $s = (New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Desktop') + '\Pub Karaoke.lnk'); $s.TargetPath = $d + 'start-karaoke.bat'; $s.WorkingDirectory = $d; $s.Save()"
 
 echo.
 echo On the pub PC, karaoke can start by itself whenever the PC is switched on (Windows asks for permission).
 choice /c YN /m "Start karaoke automatically"
 if errorlevel 2 goto :done
-set "AUTOARGS="
+set "KARAOKE_KEY="
 choice /c YN /m "Is the TV on a separate laptop, using tv-laptop.bat"
 if errorlevel 2 goto :autostart
 set /p "KEY=Drag the laptop's id_ed25519.pub file into this window, then press Enter: "
-set "AUTOARGS=,'-TvLaptopKey','\"%KEY:"=%\"'"
+set "KARAOKE_KEY=%KEY:"=%"
 :autostart
-powershell -NoProfile -Command "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-NoExit','-File','\"%~dp0install-autostart.ps1\"'%AUTOARGS%"
+powershell -NoProfile -Command "$a = '-NoProfile','-ExecutionPolicy','Bypass','-NoExit','-File',('\"' + $env:KARAOKE_DIR + 'install-autostart.ps1\"'); if ($env:KARAOKE_KEY) { $a += '-TvLaptopKey',('\"' + $env:KARAOKE_KEY + '\"') }; Start-Process powershell -Verb RunAs -ArgumentList $a"
 
 :done
 echo.

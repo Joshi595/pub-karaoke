@@ -191,6 +191,45 @@ def test_slugify():
     assert slugify("AC/DC", "T.N.T.") == "ac-dc-t-n-t"
 
 
+def test_slugify_never_empty_for_non_latin_names():
+    # "" as a folder name is library/ itself: making such a song once moved the whole library away and deleted it
+    kino, utada = slugify("Кино", "Группа крови"), slugify("宇多田ヒカル", "初恋")
+    assert re.fullmatch(r"song-[0-9a-f]{12}", kino) and re.fullmatch(r"song-[0-9a-f]{12}", utada)
+    assert kino != utada and kino == slugify("Кино", "Группа крови")  # stable: the app finds the made song again
+
+
+def test_serve_reports_a_crash_on_one_line_and_frees_a_full_gpu(monkeypatch, capsys, tmp_path):
+    import io
+    import pytest
+    def oom(*a, **kw):
+        raise RuntimeError("CUDA error: out of memory\nSearch for `cudaErrorMemoryAllocation' for more information.\n")
+    monkeypatch.setattr("make_songs.ROOT", tmp_path)
+    monkeypatch.setattr("make_songs.make_song", oom)
+    monkeypatch.setattr("sys.stdin", io.StringIO("Abba - Waterloo\nAbba - Mamma Mia\n"))
+    with pytest.raises(SystemExit) as stop:  # the app starts a fresh maker, with all graphics memory free again
+        serve(tmp_path, tmp_path, None, 4)
+    assert stop.value.code == 3
+    out = capsys.readouterr().out.splitlines()
+    assert out == ["FAIL error RuntimeError: CUDA error: out of memory Search for `cudaErrorMemoryAllocation' for more information."]
+    assert len((tmp_path / "needs-attention.txt").read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_prefetch_keeps_songs_that_hit_a_passing_problem(monkeypatch, tmp_path):
+    (tmp_path / "library").mkdir()
+    (tmp_path / "library" / "karafuncatalog.csv").write_text(
+        "Id;Title;Artist;Year;Duo;Explicit;Styles;Languages\n1;Waterloo;ABBA;1974;0;0;Pop;English\n2;Africa;Toto;1982;0;0;Rock;English\n",
+        encoding="utf-8")
+    monkeypatch.setattr("make_songs.ROOT", tmp_path)
+    def make(req, *a, **kw):
+        if req["title"] == "Waterloo":
+            raise ConnectionError("LRCLIB not answering, will retry next run")
+        return "skip: no synced lyrics on LRCLIB"
+    monkeypatch.setattr("make_songs.make_song", make)
+    prefetch(5, tmp_path / "library", tmp_path / "work", None, 4)
+    # only a lasting reason makes a song video-only; LRCLIB being down tonight is tried again next run
+    assert json.loads((tmp_path / "catalog-status.json").read_text(encoding="utf-8")) == {"k2": "failed"}
+
+
 def test_unknown_theme_hint_is_ignored():
     assert pick_theme("toString", "Rock", 1995, "en") == "rock"
     assert parse_song_list("# Wishes\nAbba - Waterloo | __proto__\n")[0]["hint"] is None

@@ -23,7 +23,7 @@ from flask import Flask, abort, jsonify, request, send_from_directory
 
 from catalog import Catalog
 from make_songs import KARAFUN_LIST, has_synced_lyrics, library_gb
-from operations import backup, backup_library, completed_song, process_options, stop_process, token_digest
+from operations import backup, backup_library, completed_song, from_backups, process_options, stop_process, token_digest
 
 NEW_NIGHT_AFTER = 12 * 3600
 MAX_QUEUE = 60  # the whole queue: anonymous phones can't flood it with made-up names
@@ -38,7 +38,10 @@ def write_json(path, data, indent=None):
     """Write via a temp file so a crash never leaves half a file behind."""
     tmp = Path(str(path) + "." + uuid.uuid4().hex + ".tmp")
     try:
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent), encoding="utf-8")
+        with tmp.open("w", encoding="utf-8") as f:
+            f.write(json.dumps(data, ensure_ascii=False, indent=indent))
+            f.flush()
+            os.fsync(f.fileno())  # on disk before the swap: a power cut must not leave an empty settings.json
         for attempt in range(5):
             try:
                 tmp.replace(path)
@@ -160,6 +163,7 @@ class Party:
         if self.now_playing:
             return self.now_playing
         # a song deleted from the library that nobody is making can never play
+        before = len(self.queue)
         self.queue = [e for e in self.queue if e["song_id"] in self.songs or e.get("wish")]
         up = self.upcoming()
         pick = next((e for e in up if self.ready(e)), None)
@@ -173,7 +177,8 @@ class Party:
             song = self.songs.get(pick["song_id"], {})
             self.help_vocals = song.get("help_vocals", 0.25)
             self.nudge = song.get("sync", {}).get("nudge", 0.0)
-        self.save()
+        if pick or len(self.queue) != before:  # the TV asks every second: an idle lobby writes nothing
+            self.save()
         return self.now_playing
 
     def made(self, wish, slug):
@@ -473,6 +478,21 @@ def bind_exclusive(port, host="127.0.0.1"):
 def ensure_settings(root):
     """settings.json, written on first start (or by setup) with a random staff PIN, never one everybody knows."""
     f = Path(root) / "settings.json"
+    if f.exists():
+        try:
+            if isinstance(json.loads(f.read_text(encoding="utf-8-sig")), dict):
+                return f
+        except ValueError:
+            pass
+        # a typo made in Notepad, or a power cut mid-write: the app must still start, with the last good settings
+        broken = f.with_name(f"settings.json.broken-{time.strftime('%Y%m%d-%H%M%S')}")
+        f.replace(broken)
+        print(f"settings.json could not be read; it is kept as {broken.name}", flush=True)
+        good = from_backups(root, "settings.json")
+        if good:
+            write_json(f, good, indent=1)
+            print("Restored settings.json from the newest backup.", flush=True)
+            return f
     if not f.exists():
         pin = f"{secrets.randbelow(10 ** 6):06d}"
         write_json(f, {**DEFAULT_SETTINGS, "pin": pin}, indent=1)
@@ -493,9 +513,22 @@ class PublicIngress:
 def create_app(root):
     root = Path(root)
     settings = {**DEFAULT_SETTINGS, **json.loads(ensure_settings(root).read_text(encoding="utf-8-sig"))}
-    if nights(settings["nights"]) is None:  # edited by hand and broken: every page asks for tonight's look
-        print("warning: 'nights' in settings.json is not valid; no special nights until it is fixed", flush=True)
-        settings["nights"] = []
+    # Edited by hand: a value of the wrong kind ("2" instead of 2, a broken night) falls back to its default with a
+    # warning, instead of breaking every pick or every page. The staff page's own rules decide what is valid.
+    for k in EDITABLE:
+        if k in settings:
+            try:
+                settings[k] = merge_settings(settings, {k: settings[k]})[k]
+            except QueueError:
+                numeric = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
+                if numeric(settings[k]) and numeric(DEFAULT_SETTINGS.get(k)):
+                    continue  # a number past the staff page's range is the file editor's own choice
+                print(f"warning: '{k}' in settings.json is not valid; using the default until it is fixed", flush=True)
+                settings[k] = DEFAULT_SETTINGS.get(k, {})
+    for k in ("wifi_name", "wifi_password", "public_url"):
+        if not isinstance(settings[k], str):
+            print(f"warning: '{k}' in settings.json must be text in quotes; ignoring it until it is fixed", flush=True)
+            settings[k] = ""
     if settings.get("logo"):  # one logo, as kept before logos per look
         settings["logos"] = [{"file": settings["logo"], "look": ""}]
     settings.pop("logo", None)
@@ -625,7 +658,10 @@ def create_app(root):
         p = proc[0]
         if p is None or p.poll() is not None:
             (root / "work").mkdir(exist_ok=True)
-            log = open(root / "work" / "maker.log", "a", encoding="utf-8")
+            log_file = root / "work" / "maker.log"
+            if log_file.exists() and log_file.stat().st_size > 5_000_000:  # one old log kept, never an ever-growing one
+                log_file.replace(log_file.with_suffix(".log.1"))
+            log = open(log_file, "a", encoding="utf-8")
             # overlap 4: ~2.5 min per song on an RTX 3060 instead of ~3.5 at the overnight default of 8, slightly more vocal bleed
             try:
                 p = proc[0] = subprocess.Popen([str(maker_py), "-X", "utf8", "-u", "make_songs.py", "--serve", "--overlap=4"], cwd=root,
@@ -690,12 +726,14 @@ def create_app(root):
 
     def hurry():
         """A guest is waiting for a song: stop an idle-time song half-way (it's made again later) so theirs starts
-        now instead of up to 3 minutes later."""
-        p = proc[0]
-        if making.get("prefetch") and p and p.poll() is None:
+        now instead of up to 3 minutes later. Call it without holding `lock`: ending a process can take seconds."""
+        with lock:
+            p = proc[0]
+            if not (making.get("prefetch") and p and p.poll() is None):
+                return
             making["interrupted"] = True
-            # the venv's python.exe is a launcher with the real interpreter as its child: end both
-            stop_process(p)
+        # the venv's python.exe is a launcher with the real interpreter as its child: end both
+        stop_process(p)
 
     def maker_loop():
         while not stopping.is_set():
@@ -799,8 +837,8 @@ def create_app(root):
                         startup_timeout.cancel()
                         tunnel[0] = url
                         print(f"Guests over the internet: {url}/", flush=True)
-            except OSError as err:
-                print(f"Internet link problem: {err}", flush=True)
+            except Exception as err:  # anything at all: this thread is the internet link for the whole night
+                print(f"Internet link problem: {type(err).__name__}: {err}", flush=True)
             finally:
                 if startup_timeout:
                     startup_timeout.cancel()
@@ -970,8 +1008,10 @@ def create_app(root):
                 # all for a while; staff on the laptop or the venue's own Wi-Fi aren't affected
                 if now < until or (via_internet() and len(internet_fails) >= 30):
                     return jsonify(error="locked"), 429
-                if public_request() and str(settings["pin"]) == DEFAULT_SETTINGS["pin"]:
-                    return jsonify(error="pin_too_easy"), 409  # the staff page is on the internet: 1234 won't do
+                pin = str(settings["pin"]).strip()
+                # an empty PIN would let in anyone who sends none; 1234 won't do on the internet
+                if len(pin) < 4 or (public_request() and pin == DEFAULT_SETTINGS["pin"]):
+                    return jsonify(error="pin_too_easy"), 409
                 if not hmac.compare_digest(request.headers.get("X-Pin", "").encode(), str(settings["pin"]).encode()):
                     fails += 1  # five wrong guesses lock that device out for a minute
                     if who not in wrong_pins and len(wrong_pins) >= 4096:
@@ -1125,7 +1165,7 @@ def create_app(root):
             entry = party.add(name, device, "", wish=text, catalog=row["id"])
             remember_pick(row["id"])
             out = view(entry, device)
-            hurry()
+        hurry()  # outside the lock: the TV and the other phones don't wait for a process to end
         wake.set()
         if video_slots.acquire(blocking=False):
             threading.Thread(target=find_videos, args=(text,), daemon=True).start()
@@ -1166,8 +1206,8 @@ def create_app(root):
         with lock:
             entry = party.add(b.get("name"), device, "", wish=text, yt=yt, video=hopeless)
             out = view(entry, device)
-            if not hopeless:
-                hurry()
+        if not hopeless:
+            hurry()
         wake.set()
         return jsonify(out)
 

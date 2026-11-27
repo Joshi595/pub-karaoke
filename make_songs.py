@@ -3,6 +3,7 @@
 Run: .venv-maker\\Scripts\\python make_songs.py [--limit N] [--only "Artist - Title"] [--model medium]
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -323,7 +324,8 @@ def slugify(artist, title):
     for a, b in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
         s = s.replace(a, b)
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    # an all-Cyrillic or all-Japanese name keeps no letters: never "", which as a folder is library/ itself
+    return re.sub(r"[^a-z0-9]+", "-", s).strip("-") or "song-" + hashlib.sha1(f"{artist}|{title}".encode()).hexdigest()[:12]
 
 
 # ---------------------------------------------------------------- pipeline (network, ffmpeg, AI)
@@ -369,7 +371,7 @@ def has_synced_lyrics(artist, title, timeout=5):
 def fetch_itunes(artist, title):
     import requests
     try:
-        r = requests.get("https://itunes.apple.com/search", params={"term": f"{artist} {title}", "entity": "song", "limit": 5}, timeout=20)
+        r = requests.get("https://itunes.apple.com/search", params={"term": f"{artist} {title}", "entity": "song", "limit": 5}, timeout=20, headers=UA)
         return r.json().get("results", [])
     except Exception:
         return []
@@ -532,7 +534,7 @@ def retime(slugs, library, model):
             print(f"{score:4.0%} timed by ear  {slug}  ({time.time() - t0:.0f}s)", flush=True)
             done += 1
         except Exception as e:
-            print(f"skip: error {type(e).__name__}: {e}  {slug}", flush=True)
+            print(f"{failure(e)}  {slug}", flush=True)
     return done
 
 
@@ -566,7 +568,7 @@ def remake(slugs, library, work, model, overlap):
             print(f"{before:.0%} -> {score:.0%} with another recording  {slug}", flush=True)
             better += 1
         except Exception as e:
-            print(f"skip: error {type(e).__name__}: {e}  {slug}", flush=True)
+            print(f"{failure(e)}  {slug}", flush=True)
     return better
 
 
@@ -620,6 +622,8 @@ def _make_song(req, library, work, model, overlap, progress, skip, tries, good_e
     if not space_available():
         return "skip: error storage limit reached"
     final = library / slug
+    if not re.fullmatch(r"[a-z0-9-]+", slug) or final.parent != library or (work / slug).parent != work:
+        return "skip: error unsafe song folder name"  # never library/ or work/ themselves: that would delete them
     if final.exists():
         # Preserve partial data for inspection; only replace it after a complete replacement is ready.
         if final.is_symlink() or not final.is_dir():
@@ -657,9 +661,12 @@ def _make_song(req, library, work, model, overlap, progress, skip, tries, good_e
     meta = pick_itunes(fetch_itunes(artist, title), artist) or {"genre": "", "year": None, "cover": ""}
     if meta["cover"]:
         import requests
-        r = requests.get(meta["cover"], timeout=20)
-        if r.ok:
-            (out / "cover.jpg").write_bytes(r.content)
+        try:  # the cover is a nicety: a timeout here must not throw away minutes of vocal removal
+            r = requests.get(meta["cover"], timeout=20, headers=UA)
+            if r.ok:
+                (out / "cover.jpg").write_bytes(r.content)
+        except requests.RequestException as e:
+            print(f"   no cover: {type(e).__name__}", flush=True)
     mb = fetch_mb_artist(artist) or {"tags": [], "country": None}
     song = {"artist": artist, "title": title, "duration": float(yt["duration"]), "year": meta["year"],
             "genre": meta["genre"], "lang": lang,
@@ -680,7 +687,18 @@ def _make_song(req, library, work, model, overlap, progress, skip, tries, good_e
     return "ok"
 
 
+def failure(e):
+    """A crash as one short line: CUDA and HTTP errors span several lines, which broke the stdout protocol and the log."""
+    return "skip: error " + " ".join(f"{type(e).__name__}: {e}".split())[:300]
+
+
+def gpu_full(status):
+    """Out of graphics memory: another program (or a stuck model) holds it. The next song would fail the same way."""
+    return "out of memory" in status.lower()
+
+
 def log_attention(line, reason):
+    reason = " ".join(reason.split())
     f = ROOT / "needs-attention.txt"
     seen = f.read_text(encoding="utf-8") if f.exists() else ""
     if f"\t{line}\t{reason}\n" not in seen:
@@ -714,11 +732,12 @@ def prefetch(n, library, work, model, overlap):
         return print(f"--prefetch picks from the KaraFun song list: save the CSV from {KARAFUN_LIST} as {csv_file}")
     catalog = Catalog(csv_file, starter.read_text(encoding="utf-8") if starter.exists() else "")
     popular = {cid: v[0] for cid, v in read("history.json", {}).items()}
+    tried = set()  # songs that hit a passing problem tonight (network, GPU): skipped this run, tried again next run
     for _ in range(n):
         if library_gb(library) >= settings.get("library_max_gb", 20):
             return print("disk limit reached")
         catalog.set_library({p.parent.name: json.loads(p.read_text(encoding="utf-8")) for p in library.glob("*/song.json")})
-        row = catalog.prefetch(popular, skip=set(status), hide_explicit=settings.get("hide_explicit", True),
+        row = catalog.prefetch(popular, skip=set(status) | tried, hide_explicit=settings.get("hide_explicit", True),
                                langs=settings.get("languages") or None)
         if not row:
             return
@@ -726,10 +745,15 @@ def prefetch(n, library, work, model, overlap):
         try:
             result = make_song({"artist": row["artist"], "title": row["title"], "hint": None, "lang": None}, library, work, model, overlap)
         except Exception as e:
-            result = f"skip: error {type(e).__name__}: {e}"
+            result = failure(e)
         print(f"{result:<40} {line}", flush=True)
         if result.startswith("skip"):
             log_attention(line, result[6:])
+            if gpu_full(result):
+                return print("The graphics card is out of memory (is another program using it?). Stopping; run again later.")
+            if result.startswith("skip: error"):  # LRCLIB down, a crash: not this song's fault, so not "video only"
+                tried.add(row["id"])
+                continue
             status[row["id"]] = "failed"  # the app shows it as video-only; staff can clear it with Try again
             (ROOT / "catalog-status.json").write_text(json.dumps(status), encoding="utf-8")
 
@@ -753,12 +777,14 @@ def serve(library, work, model, overlap):
         try:
             status = make_song(req, library, work, model, overlap, lambda stage, pct: print(f"STAGE {stage} {pct}", flush=True))
         except Exception as e:
-            status = f"skip: error {type(e).__name__}: {e}"
+            status = failure(e)
         if status in ("ok", "exists"):
             print(f"SLUG {slugify(req['artist'], req['title'])}", flush=True)
         else:
             log_attention(name, status[6:])
             print(f"FAIL {status[6:]}", flush=True)
+            if gpu_full(status):  # end this process so all graphics memory is freed; the app starts a fresh one
+                sys.exit(3)
 
 
 def main(argv=None):
@@ -770,7 +796,7 @@ def main(argv=None):
             if (folder.is_dir() and not folder.is_symlink() and folder.name not in ("incomplete", "replaced")
                     and re.fullmatch(r"[a-z0-9-]+", folder.name)
                     and time.time() - folder.stat().st_mtime > 86400):
-                shutil.rmtree(folder)
+                shutil.rmtree(folder, ignore_errors=True)  # one held open by antivirus goes next time
         return run_main(argv)
 
 
@@ -832,12 +858,15 @@ def run_main(argv=None):
         try:
             status = make_song(req, library, work, model, args.overlap)
         except Exception as e:
-            status = f"skip: error {type(e).__name__}: {e}"
+            status = failure(e)
         print(f"{status:<40} {line}  ({time.time() - t0:.0f}s)", flush=True)
         if status in ("ok", "exists"):
             print(f"SLUG {slugify(req['artist'], req['title'])}", flush=True)  # read by app.py when it makes a guest's wish
         if status.startswith("skip"):
             log_attention(line, status[6:])
+            if gpu_full(status):  # every song after this one would fail the same way (54 did, one night)
+                print("The graphics card is out of memory (is another program using it?). Stopping; run again later.")
+                break
         elif status == "ok":
             made += 1
             if args.limit and made >= args.limit:

@@ -329,3 +329,59 @@ def test_real_server_keeps_public_and_private_listeners_separate(tmp_path):
         with pytest.raises(urllib.error.HTTPError) as e: urllib.request.urlopen(request, timeout=1)
         assert e.value.code == 403
     finally: stop_process(p)
+
+
+def test_unreadable_settings_come_back_from_the_newest_backup(tmp_path):
+    (tmp_path / "settings.json").write_text(json.dumps({"pin": "482915", "pub_name": "Backed Up"}))
+    backup(tmp_path)
+    (tmp_path / "settings.json").write_text('{"pin": "482915", "pub_name": "Typo",}')  # a trailing comma in Notepad
+    path = app.ensure_settings(tmp_path)
+    assert json.loads(path.read_text(encoding="utf-8")) == {"pin": "482915", "pub_name": "Backed Up"}
+    assert len(list(tmp_path.glob("settings.json.broken-*"))) == 1  # the staff's edit is kept, not thrown away
+
+
+def test_unreadable_settings_without_a_backup_start_fresh_with_a_private_pin(tmp_path):
+    (tmp_path / "settings.json").write_bytes(b"")  # a power cut in the middle of a write
+    settings = json.loads(app.ensure_settings(tmp_path).read_text(encoding="utf-8"))
+    assert len(settings["pin"]) == 6 and settings["pin"] != "1234"
+
+
+def test_wrong_kinds_of_values_fall_back_to_defaults(tmp_path):
+    (tmp_path / "settings.json").write_text(json.dumps({
+        "pin": "999999", "internet_link": False, "auto_download": False,
+        "songs_per_singer": "2", "nights": "every friday", "wifi_name": 5, "look": "disco"}))
+    song(tmp_path / "library" / "test-ready")
+    web = app.create_app(tmp_path)
+    try:
+        c = web.test_client()
+        assert c.post("/api/queue", json={"name": "Ana", "device": "d", "song_id": "test-ready"}).status_code == 200
+        state = c.get("/api/state").json
+        assert state["songs_per_singer"] == 2 and state["nights"] == [] and state["look"]["look"] == "stage"
+        assert state["wifi"]["name"] == ""
+    finally:
+        web.config["shutdown"]()
+
+
+def test_a_blank_pin_never_opens_the_staff_page(tmp_path):
+    (tmp_path / "settings.json").write_text(json.dumps({"pin": "", "internet_link": False, "auto_download": False}))
+    web = app.create_app(tmp_path)
+    try:
+        assert web.test_client().post("/api/admin/check", headers={"X-Pin": ""}).status_code == 409
+    finally:
+        web.config["shutdown"]()
+
+
+def test_an_idle_lobby_writes_nothing(tmp_path):
+    party = app.Party({}, path=tmp_path / "state.json")
+    party.next()  # the TV asks about once a second all night
+    assert not (tmp_path / "state.json").exists()
+
+
+def test_a_taken_tv_link_port_does_not_stop_the_app(tmp_path, monkeypatch, capsys):
+    import tv_link
+    async def taken(*a, **kw):
+        raise OSError("address already in use")
+    monkeypatch.setattr(tv_link, "listen", taken)
+    with tv_link.running_link(tmp_path, 5000):
+        pass  # guests and a local TV carry on
+    assert "TV link not started" in capsys.readouterr().out

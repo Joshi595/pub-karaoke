@@ -24,7 +24,7 @@ def prepare(root):
     from app import ensure_settings, write_json
     path = ensure_settings(root)
     settings = json.loads(path.read_text(encoding="utf-8-sig"))
-    if str(settings.get("pin", "1234")) == "1234":
+    if str(settings.get("pin", "1234")) == "1234" or len(str(settings.get("pin", "")).strip()) < 4:  # default or blank
         backup(root)  # keep the previous configuration private and recoverable
         settings["pin"] = f"{secrets.randbelow(1_000_000):06d}"
         if not write_json(path, settings, indent=1):
@@ -47,8 +47,9 @@ def serve(root):
         sockets.append(bind_exclusive(guest_port, "0.0.0.0"))  # venue Wi-Fi guest ingress only  # nosec B104
         application = create_app(root)
         for wsgi, sock in ((application, sockets[0]), (PublicIngress(application), sockets[1])):
+            # bodies over 2 MB (the logo, at most 1 MB, is the largest) are refused before waitress buffers them to disk
             servers.append(create_server(wsgi, sockets=[sock], threads=16, connection_limit=500,
-                                         channel_timeout=30, ident=""))
+                                         channel_timeout=30, ident="", max_request_body_size=2_000_000))
         def cleanup():
             application.config["shutdown"]()
             for server in servers:

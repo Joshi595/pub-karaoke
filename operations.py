@@ -154,5 +154,18 @@ def restore(root, archive, include_library=False):
                 shutil.copy2(src, dst)
 
 
+def from_backups(root, name):
+    """The newest backed-up copy of one venue file (e.g. settings.json) that still reads as JSON, or None."""
+    for archive in sorted((Path(root) / "backups").glob("*.zip"), reverse=True):  # names start with the date
+        try:
+            with zipfile.ZipFile(archive) as z:
+                data = json.loads(z.read(name).decode("utf-8-sig"))
+            if isinstance(data, dict):
+                return data
+        except (OSError, KeyError, ValueError, zipfile.BadZipFile):
+            continue
+    return None
+
+
 def token_digest(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()

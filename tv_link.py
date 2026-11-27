@@ -136,12 +136,17 @@ def running_link(root, port):
 
     thread = threading.Thread(target=run, name="TV link", daemon=True)
     thread.start()
-    started.result()
+    try:
+        started.result()
+    except OSError as err:  # port taken: the laptop at the TV can't link, but guests and staff must still get in
+        print(f"TV link not started ({err}); the laptop at the TV can't connect until the port is free", flush=True)
+        yield
+        return
     try:
         yield
     finally:
         loop.call_soon_threadsafe(loop.stop)
-        thread.join()
+        thread.join(timeout=10)  # a stuck link must not keep the song maker and the tunnel running after shutdown
 
 
 def make_installer(root, destination):

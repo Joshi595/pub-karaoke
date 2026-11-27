@@ -444,5 +444,5 @@ $("recoverForm").addEventListener("submit", async ev => {
 })();
 $("copyCode").onclick = async () => {
   try { await navigator.clipboard.writeText(guestToken); toast(t().copied); }
-  catch { $("recoveryCode").select(); toast(t().copyManual); }  // no clipboard on plain http: select it instead
+  catch { $("recoveryCode").select(); toast(t().copyManual); }  // plain http has no clipboard: highlight the code instead
 };

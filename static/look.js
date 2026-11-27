@@ -28,7 +28,7 @@ function applyVenueLook(look) {
 }
 // ---------------------------------------------------------------- shared by every page
 
-// WCAG contrast of two #rrggbb colours, from 1 (none) to 21.
+// WCAG contrast of two #rrggbb colours: 1 (none) up to 21.
 function contrast(a, b) {
   const lum = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
     .map(c => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)

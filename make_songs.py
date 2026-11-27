@@ -325,7 +325,7 @@ def slugify(artist, title):
         s = s.replace(a, b)
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode()
     # an all-Cyrillic or all-Japanese name keeps no letters: never "", which as a folder is library/ itself
-    return re.sub(r"[^a-z0-9]+", "-", s).strip("-") or "song-" + hashlib.sha1(f"{artist}|{title}".encode()).hexdigest()[:12]
+    return re.sub(r"[^a-z0-9]+", "-", s).strip("-") or "song-" + hashlib.sha256(f"{artist}|{title}".encode()).hexdigest()[:12]
 
 
 # ---------------------------------------------------------------- pipeline (network, ffmpeg, AI)

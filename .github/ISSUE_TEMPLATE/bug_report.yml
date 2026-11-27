@@ -1,0 +1,45 @@
+name: Something doesn't work
+description: A problem with the TV, the phones, the staff page, setup or the song maker.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Security problems** go through [private reporting](https://github.com/Joshi595/pub-karaoke/security/advisories/new), not here.
+        Before pasting logs, remove the staff PIN, Wi-Fi password, guests' names and your internet address: this page is public.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      placeholder: "After a song, the TV stayed on the applause screen instead of calling the next singer."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we make it happen?
+      placeholder: "1. Two guests pick songs  2. Staff press Skip during the countdown  3. …"
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release you installed (e.g. 1.2.0), or "main" with the date you downloaded it.
+    validations:
+      required: true
+  - type: dropdown
+    id: setup
+    attributes:
+      label: Setup
+      options:
+        - One Windows laptop or PC (TV on HDMI)
+        - Pub PC with the TV on a separate laptop
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines (optional, with private details removed)
+      description: From `logs/supervisor.log`, or the song maker's `needs-attention.txt`.
+      render: text

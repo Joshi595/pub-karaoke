@@ -19,9 +19,13 @@ downloads and private print pages, and always removes the Wi-Fi password. A reve
 
 - **Staff page:** every staff action needs the staff PIN. Setup creates a random 6-digit PIN.
   - Startup backs up and replaces an existing default PIN. The replacement is read locally from `settings.json`.
+  - After a correct PIN the phone gets a random staff token for that night instead of keeping the PIN. The app keeps
+    only its SHA-256 digest, in memory; it expires at the 6 am changeover or when the app restarts.
   - Five wrong PINs lock that device out for a minute.
-  - More than 30 wrong PINs over the internet in 10 minutes close the staff page to the internet for everyone, for up to 10 minutes. Staff on the laptop or the venue's own Wi-Fi can still get in.
-  - The default PIN `1234` is refused over the internet.
+  - More than 30 wrong PINs over the internet in 10 minutes close the staff page to the internet for anyone not
+    already unlocked, for up to 10 minutes. Staff phones unlocked tonight, the laptop and the venue's own Wi-Fi still get in.
+  - The default PIN `1234` is refused over the internet, and a blank or shorter-than-4 PIN is refused everywhere
+    (and replaced at startup, like `1234`).
 - **The TV:** only the laptop itself can start and finish songs. Those requests must come from the laptop's own address, carry JSON (which other websites can't send without asking), and name the laptop by address. That last check blocks DNS rebinding. Requests that arrive through the tunnel never count as the laptop. A TV on a separate laptop reaches the local TV port only through an SSH port forward whose key is limited to that port (`restrict,port-forwarding,permitopen`, a forced command, no passwords; see `install-autostart.ps1 -TvLaptopKey`), so the app's address checks are unchanged. With `Setup-Pub-PC.bat` the forward is served by the app itself (`tv_link.py`, port 5022, private networks only): no Windows login, shell or passwords; one Ed25519 key, paired by a single-use ticket that expires after 24 hours (stored only as a hash), may open a channel to the local TV port and nothing else. The laptop pins the PC's host key from the pairing file. Only one TV screen at a time may run the queue.
 - **Guests:**
   - Public queue changes require a cryptographically random server-issued guest token. Only its SHA-256 digest is
@@ -32,7 +36,8 @@ downloads and private print pages, and always removes the Wi-Fi password. A reve
   - Expensive lookups have bounded concurrency and caching. Submission and credential recovery endpoints are rate-limited.
   - Guests can only remove their own songs.
   - Names lose control and invisible characters.
-  - The queue holds at most 60 songs.
+  - The queue holds at most 60 songs, and one phone at most three people's songs.
+  - Request bodies over 2 MB are refused before they are read.
   - Song wishes can't carry commands to the song maker.
 - **Pages:** a strict Content Security Policy lets the pages run only their own scripts (and YouTube's player on the TV), and no other site may put them in a frame. Guests' text is always inserted as text, never as HTML.
 - **Secrets:** `settings.json` (PIN, Wi-Fi password) is never committed: it's in `.gitignore`. The Wi-Fi password is only sent through the local TV listener, never through the guest listener or internet link.
@@ -42,7 +47,7 @@ downloads and private print pages, and always removes the Wi-Fi password. A reve
 ## Known limits
 
 - On the venue's Wi-Fi the pages use plain `http://`, so someone listening on an open Wi-Fi can read the staff PIN when staff type it. Use a Wi-Fi with a password, or the internet link (`https://`), for the staff page.
-- Over the internet link, every guest on the venue's Wi-Fi shares one public address. Five wrong PINs from one prankster lock that address out for a minute, staff included; staff can use the laptop meanwhile.
+- Over the internet link, every guest on the venue's Wi-Fi shares one public address. Five wrong PINs from one prankster lock that address out for a minute for anyone who isn't unlocked yet; staff phones unlocked earlier that night are not affected.
 - Guest/staff phones now use 5001. Local 5000 is loopback-only. Keep LAN 5001 limited to private networks.
 - The free internet tunnel has no availability guarantee and changes hostname on recreation. Prepared audio stays
   local. Guests must rescan after an address change and can recover tickets using their private recovery code.
@@ -53,7 +58,8 @@ downloads and private print pages, and always removes the Wi-Fi password. A reve
 
 Every push is checked by:
 
-- **Tests:** on Windows, macOS and Linux.
+- **Tests:** on Windows, macOS and Linux, including browser tests with axe-core accessibility checks.
+- **Lint:** ruff (Python), a syntax check of every page script, and PSScriptAnalyzer (the PowerShell installers).
 - **Bandit:** Python security lint.
 - **pip-audit:** known vulnerabilities in the pinned packages.
 - **gitleaks:** secrets in the history.
@@ -62,3 +68,7 @@ Every push is checked by:
 - **OpenSSF Scorecard:** how the repository itself is set up.
 
 Dependabot proposes updates every week.
+
+Releases are built by GitHub Actions only from a tag on `main` that passes the tests. Each release lists the SHA-256
+of its files in `SHA256SUMS.txt`, and carries signed build provenance you can check with
+`gh attestation verify Setup-Pub-PC.bat -R Joshi595/pub-karaoke`.

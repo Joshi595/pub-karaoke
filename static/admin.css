@@ -16,7 +16,7 @@ h2 { font: 400 1.4rem var(--display-font); margin: 24px 0 6px; }
 .lock { margin-top: 18vh; }
 .lock p { color: var(--muted); }
 .lock form { display: flex; gap: 10px; }
-.lock input { flex: 1; min-width: 0; min-height: 56px; font-size: 1.6rem; letter-spacing: .3em; text-align: center; border-radius: var(--radius); border: 2px solid var(--line); background: var(--surface); }
+.lock input { flex: 1; min-width: 0; min-height: 56px; font-size: 1.6rem; letter-spacing: .3em; text-align: center; border-radius: var(--radius); border: 2px solid var(--muted); background: var(--surface); }
 .lock input:focus { border-color: var(--accent); }
 
 .stage { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-top: 12px; }
@@ -54,7 +54,7 @@ details.settings { background: var(--surface); border-radius: var(--radius); pad
 details.settings summary { font: 400 1.4rem var(--display-font); padding: 12px 0; min-height: 48px; cursor: pointer; }
 .field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; margin: 0 0 14px; }  /* no wide child (the logo) pushes it off the screen */
 .field label { font-weight: 700; }
-select { font: inherit; color: inherit; min-height: 48px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); padding: 0 10px; }
+select { font: inherit; color: inherit; min-height: 48px; border-radius: 12px; border: 2px solid var(--muted); background: var(--bg); padding: 0 10px; }
 select:focus { border-color: var(--accent); }
 .check { display: flex; align-items: center; gap: 12px; min-height: 44px; }
 .check input { width: 22px; height: 22px; accent-color: var(--accent); margin: 0; }
@@ -71,10 +71,10 @@ ul.care { list-style: none; margin: 6px 0 0; padding: 0; }
 .care .acts .btn { flex: 0 1 auto; min-height: 44px; padding: 0 14px; }
 .care small { color: var(--muted); display: block; }
 .care .empty { color: var(--muted); }
-input.text { font: inherit; color: inherit; min-height: 48px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); padding: 0 12px; }
+input.text { font: inherit; color: inherit; min-height: 48px; border-radius: 12px; border: 2px solid var(--muted); background: var(--bg); padding: 0 12px; }
 input.text:focus { border-color: var(--accent); }
 input.icon { width: 5.5em; font-size: 1.4rem; text-align: center; }
-input[type="color"] { flex: none; width: 72px; min-height: 56px; padding: 4px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); }
+input[type="color"] { flex: none; width: 72px; min-height: 56px; padding: 4px; border-radius: 12px; border: 2px solid var(--muted); background: var(--bg); }
 /* each look previews itself: the tile carries the look, so its colours and display face are that look's own */
 fieldset.looks { border: 0; padding: 0; margin: 0 0 14px; }
 fieldset.looks legend { font-weight: 700; padding: 0; margin-bottom: 6px; }
@@ -97,7 +97,7 @@ fieldset.nights legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
 #nights { list-style: none; margin: 6px 0 10px; padding: 0; }
 #nights li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 #nights .btn, #addNight { flex: 0 1 auto; min-height: 44px; padding: 0 16px; }
-fieldset.logos { border: 0; padding: 0; margin: 0 0 14px; display: grid; gap: 6px; }
+fieldset.logos { border: 0; padding: 0; margin: 0 0 14px; display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr); }  /* not as wide as the file picker: that pushed the page sideways on phones */
 fieldset.logos legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
 fieldset.logos label { font-weight: 700; margin-top: 6px; }
 #logos { list-style: none; margin: 0; padding: 0; }

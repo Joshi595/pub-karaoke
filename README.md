@@ -78,6 +78,8 @@ cd pub-karaoke
 
 **First start:** setup creates `settings.json` with a random **staff PIN**. Open that file locally in a text editor to read or change it. Staff open `/admin` using the guest/internet address and enter it there. An existing default PIN is backed up and replaced automatically on startup.
 
+**What's new:** each version's changes are in [CHANGELOG.md](CHANGELOG.md). Updating keeps your settings, songs and logos.
+
 **The full song list:** at first, guests can only find the songs in `starter-songs.txt`. To let them search about 90,000 songs, download the CSV song list from [KaraFun's song list page](https://www.karafun.com/karaoke-song-list.html) and save it as `library/karafuncatalog.csv`, then restart. Download it again now and then for new songs.
 
 ## Make it yours
@@ -119,7 +121,7 @@ To force a look for a song, add it after the title: `Nena - 99 Luftballons | neo
 
 | Setting | Meaning |
 |---|---|
-| `pin` | Staff PIN for `/admin`. *File only.* |
+| `pin` | Staff PIN for `/admin`, at least 4 characters. Staff enter it once per night on each phone. *File only.* |
 | `pub_name`, `look`, `accent`, `icon`, `shelves` | Your venue's name and look (see above). |
 | `logos` | The logos next to `settings.json`, each for every look or for one look: `[{"file": "logo-….jpg", "look": "halloween"}]`. Added and removed on the staff page. |
 | `nights` | Special nights: `[{"date": "2026-12-31", "look": "neon", "yearly": true}]`. Set on the staff page under *Venue look*. |
@@ -262,8 +264,10 @@ The tests need no graphics card, songs or network.
 
 For tests without browser tooling use `python -m pytest -q --ignore=test_browser.py`. Browser regressions use
 synthetic audio: install `requirements-test.txt`, run `python -m playwright install chromium`, then
-`python -m pytest -q test_browser.py`. Both suites run in CI. See the dedicated-PC guide for actual TV/audio and
-CPU/GPU checks that still need a rehearsal at the venue.
+`python -m pytest -q test_browser.py`; it includes axe-core accessibility checks of every page. Both suites run in CI,
+as do `pipx run ruff check .` (settings in `pyproject.toml`), `node --check` on every page script and PSScriptAnalyzer
+on the PowerShell installers. See the dedicated-PC guide for actual TV/audio and CPU/GPU checks that still need a
+rehearsal at the venue.
 
 | Path | What it is |
 |---|---|

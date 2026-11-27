@@ -1,0 +1,14 @@
+# Tool settings only: Pub Karaoke is an app, run from this folder, not an installable package.
+
+[tool.ruff]
+target-version = "py311"
+line-length = 160
+
+[tool.ruff.lint]
+# Real bugs only: syntax errors, undefined or unused names (pyflakes), and likely mistakes (bugbear).
+# Formatting and style are left as they are.
+select = ["E9", "F", "B"]
+ignore = ["B905"]  # zip() of lists that are equal by construction
+
+[tool.ruff.lint.per-file-ignores]
+"test_make_songs.py" = ["F403", "F405"]  # tests the maker's whole namespace on purpose

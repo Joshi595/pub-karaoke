@@ -191,3 +191,19 @@ def test_reduced_motion_stops_background_animation(browser, stage):
         p.wait_for_timeout(500)
         assert image == p.locator("#bg canvas").evaluate("c => c.toDataURL()")
     finally: p.close()
+
+
+def test_pages_pass_automated_accessibility_checks(browser, stage):
+    """axe-core, the open-source engine behind most accessibility audits: no serious or critical problems."""
+    from axe_playwright_python.sync_playwright import Axe
+    web, local, public = stage
+    web.test_client().post("/api/queue", json={"name": "Ana", "song_id": "test-track"})
+    p = browser.new_page(reduced_motion="reduce")
+    problems = []
+    for url in (public + "/", public + "/admin", local + "/tv", local + "/print"):
+        p.goto(url); p.wait_for_timeout(1500)
+        for v in Axe().run(p).response["violations"]:
+            if v["impact"] in ("serious", "critical"):
+                problems.append(f"{url} {v['id']}: {v['help']} ({len(v['nodes'])}x, e.g. {v['nodes'][0]['target']})")
+    p.close()
+    assert not problems, "\n".join(problems)

@@ -1,6 +1,5 @@
 """Regression coverage for unattended operation and the public listener boundary."""
 import json
-import shutil
 import sys
 import threading
 import time
@@ -419,3 +418,20 @@ def test_special_nights_make_room_and_leap_days_come_back():
     feb29 = [{"date": "2028-02-29", "look": "halloween", "yearly": True}]
     assert app.night_look(feb29, app.date(2029, 2, 28)) == "halloween"
     assert app.night_look(feb29, app.date(2032, 2, 28)) == ""  # a leap year has its own 29th
+
+
+def test_the_windows_package_carries_the_whole_app(tmp_path):
+    import importlib.util
+    import hashlib
+    import zipfile
+    spec = importlib.util.spec_from_file_location("package", Path("windows/package.py"))
+    package = importlib.util.module_from_spec(spec); spec.loader.exec_module(package)
+    modules = {p.name for p in Path(".").glob("*.py") if not p.name.startswith("test_")}
+    assert modules <= set(package.FILES)  # a new module left out would break every venue that updates
+    package.build(Path(".").resolve(), tmp_path)
+    zipped = (tmp_path / "pub-karaoke-windows.zip").read_bytes()
+    names = zipfile.ZipFile(tmp_path / "pub-karaoke-windows.zip").namelist()
+    assert {"app.py", "static/look.js", "static/vendor/p5.min.js", "windows/pub-pc.ps1"} <= set(names)
+    assert not any(n.startswith(("test_", "library/", "backups/")) or n == "settings.json" for n in names)
+    marker = (tmp_path / "Setup-Pub-PC.bat").read_text(encoding="ascii").splitlines()[-1].split()
+    assert marker[:2] == ["#", "PUBPACKAGE"] and marker[2] == hashlib.sha256(zipped).hexdigest()

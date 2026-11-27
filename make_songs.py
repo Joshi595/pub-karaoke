@@ -548,7 +548,7 @@ def remake(slugs, library, work, model, overlap):
             old = json.loads((d / "song.json").read_text(encoding="utf-8"))
             before = (old.get("sync") or {}).get("aligned") or 0
             shutil.rmtree(trial, ignore_errors=True)
-            same = lambda yt: yt["id"] == old.get("video") or float(yt["duration"]) == old["duration"]
+            same = lambda yt, old=old: yt["id"] == old.get("video") or float(yt["duration"]) == old["duration"]
             result = make_song({"artist": old["artist"], "title": old["title"], "hint": None, "lang": old.get("lang")},
                                trial, work, model, overlap, skip=same, tries=3, good_enough=max(0.8, before))
             made = next(trial.glob("*/song.json"), None) if result == "ok" else None

@@ -782,3 +782,24 @@ def test_broken_special_nights_in_the_file_dont_break_the_pages(tmp_path):
 def test_values_of_the_wrong_type_get_a_clean_no(client):
     assert client.post("/api/queue", json={"name": "Anna", "device": "d1", "song_id": ["a-b"]}).json["error"] == "unknown_song"
     assert client.post("/api/admin/retime", json={"slug": {"a": 1}}, headers={"X-Pin": "9999"}).json["error"] == "not_found"
+
+
+def test_every_look_reads_in_a_dark_room():
+    """WCAG AA in every look: text 4.5:1, and the outline of a text field 3:1 (fields use --muted for it)."""
+    import re
+    from pathlib import Path
+    css = Path("static/looks.css").read_text(encoding="utf-8")
+    def lum(hex_):
+        c = [int(hex_[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    def ratio(a, b):
+        hi, lo = sorted((lum(a), lum(b)), reverse=True)
+        return (hi + 0.05) / (lo + 0.05)
+    looks = dict(re.findall(r'\[data-look="(\w+)"\]\s*\{([^}]*)\}', css))
+    assert set(looks) == {"stage", "pub", "neon", "daylight", "halloween"}
+    for look, block in looks.items():
+        v = dict(re.findall(r"--([\w-]+):\s*(#[0-9A-Fa-f]{6})", block))
+        for fg, bg in (("fg", "bg"), ("fg", "surface"), ("muted", "bg"), ("muted", "surface"), ("accent", "bg"),
+                       ("on-accent", "accent"), ("on-paper", "paper"), ("danger", "paper")):
+            assert ratio(v[fg], v[bg]) >= 4.5, f"{look}: --{fg} on --{bg} is {ratio(v[fg], v[bg]):.2f}:1"

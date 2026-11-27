@@ -1345,7 +1345,7 @@ def create_app(root):
         try:
             return min(1.0, max(0.0, float(body().get("level"))))
         except (TypeError, ValueError):
-            raise QueueError("bad_level")
+            raise QueueError("bad_level") from None
 
     @app.post("/api/admin/volume")
     @admin

@@ -211,7 +211,6 @@ function songRow(s, q) {
   badges.append(el("span", `badge ${status}`, t().badge[status]));
   if (s.duo) badges.append(el("span", "badge duet", t().badge.duet));
   b.append(info, badges);
-  b.setAttribute("aria-label", `${s.title}, ${s.artist}. ${t().badge[status]}`);
   b.onclick = () => pick(s);
   const li = el("li"); li.append(b);
   return li;

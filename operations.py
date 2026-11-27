@@ -5,7 +5,6 @@ import os
 import shutil
 import signal
 import subprocess
-import time
 import uuid
 import zipfile
 from contextlib import contextmanager

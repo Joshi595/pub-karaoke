@@ -741,6 +741,7 @@ def create_app(root):
             if not (making.get("prefetch") and p and p.poll() is None):
                 return
             making["interrupted"] = True
+            proc[0] = None  # the guest's song goes to a fresh maker, never to this one while it is being ended
         # the venv's python.exe is a launcher with the real interpreter as its child: end both
         stop_process(p)
 
